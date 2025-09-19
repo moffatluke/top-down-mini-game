@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Test - Llama Knight</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+            font-family: monospace;
+        }
+        #gameContainer {
+            border: 2px solid #444;
+            background: #000;
+        }
+        #gameCanvas {
+            display: block;
+            image-rendering: pixelated;
+        }
+        #output {
+            margin-top: 20px;
+            padding: 10px;
+            background: #333;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🦙 Llama Knight - Debug Test</h1>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="1024" height="768"></canvas>
+    </div>
+    
+    <div id="output">
+        <h3>Console Output:</h3>
+        <div id="console"></div>
+    </div>
+
+    <!-- Capture console output -->
+    <script>
+        const consoleDiv = document.getElementById('console');
+        const originalLog = console.log;
+        const originalError = console.error;
+        
+        function addToOutput(message, type = 'log') {
+            const div = document.createElement('div');
+            div.style.color = type === 'error' ? '#ff6b6b' : '#74b9ff';
+            div.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+            consoleDiv.appendChild(div);
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        }
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            addToOutput(args.join(' '), 'log');
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            addToOutput(args.join(' '), 'error');
+        };
+        
+        // Test basic canvas functionality
+        window.addEventListener('load', () => {
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            console.log('🎯 Debug test started');
+            console.log('Canvas found:', canvas ? 'Yes' : 'No');
+            console.log('Canvas size:', canvas.width, 'x', canvas.height);
+            console.log('Context:', ctx ? 'Available' : 'Not available');
+            
+            // Draw test pattern
+            if (ctx) {
+                ctx.fillStyle = '#004400';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '24px Arial';
+                ctx.fillText('Canvas Test - OK', 50, 100);
+                
+                ctx.fillStyle = '#ff6b6b';
+                ctx.fillRect(50, 150, 100, 100);
+                
+                ctx.fillStyle = '#74b9ff';
+                ctx.fillRect(200, 150, 100, 100);
+                
+                console.log('✅ Basic canvas rendering works');
+            }
+        });
+    </script>
+
+    <!-- Load game scripts -->
+    <script>
+        console.log('📦 Loading SpriteLoader...');
+    </script>
+    <script src="js/zelda/SpriteLoader.js"></script>
+    
+    <script>
+        console.log('📦 Loading GameMap...');
+    </script>
+    <script src="js/zelda/GameMap.js"></script>
+    
+    <script>
+        console.log('📦 Loading Inventory...');
+    </script>
+    <script src="js/zelda/Inventory.js"></script>
+    
+    <script>
+        console.log('📦 Loading Projectile...');
+    </script>
+    <script src="js/zelda/Projectile.js"></script>
+    
+    <script>
+        console.log('📦 Loading Player...');
+    </script>
+    <script src="js/zelda/Player.js"></script>
+    
+    <script>
+        console.log('📦 Loading Game...');
+    </script>
+    <script src="js/zelda/Game.js"></script>
+    
+    <script>
+        console.log('📦 All scripts loaded, testing classes...');
+        
+        // Test if classes are defined (they're class declarations, not window properties)
+        try {
+            console.log('✅ Class available: SpriteLoader -', typeof SpriteLoader !== 'undefined' ? 'Yes' : 'No');
+            console.log('✅ Class available: ZeldaGameMap -', typeof ZeldaGameMap !== 'undefined' ? 'Yes' : 'No');
+            console.log('✅ Class available: ZeldaInventory -', typeof ZeldaInventory !== 'undefined' ? 'Yes' : 'No');
+            console.log('✅ Class available: ZeldaProjectile -', typeof ZeldaProjectile !== 'undefined' ? 'Yes' : 'No');
+            console.log('✅ Class available: ZeldaPlayer -', typeof ZeldaPlayer !== 'undefined' ? 'Yes' : 'No');
+            console.log('✅ Class available: ZeldaGame -', typeof ZeldaGame !== 'undefined' ? 'Yes' : 'No');
+        } catch (e) {
+            console.error('❌ Error checking classes:', e.message);
+        }
+        
+        // Try initializing the game
+        try {
+            console.log('🚀 Attempting to start game...');
+            window.game = new ZeldaGame();
+        } catch (error) {
+            console.error('❌ Game initialization failed:', error.message);
+            console.error('Stack trace:', error.stack);
+        }
+    </script>
+</body>
+</html>
