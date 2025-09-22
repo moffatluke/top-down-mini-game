@@ -6,6 +6,7 @@ class ZeldaGame {
         this.debugElement = document.getElementById('debug');
         
         // Game state
+        this.gameState = 'title'; // 'title', 'playing', 'paused'
         this.isRunning = false;
         this.lastTime = 0;
         this.fps = 0;
@@ -34,6 +35,10 @@ class ZeldaGame {
         
         // Debug mode
         window.DEBUG_MODE = false;
+        
+        // Message system
+        this.messageText = '';
+        this.messageTimer = 0;
         
         this.init();
     }
@@ -67,7 +72,7 @@ class ZeldaGame {
         // Load sprites first
         this.spriteLoader = new SpriteLoader();
         this.spriteLoader.load(() => {
-            console.log('📦 All sprites loaded, initializing game...');
+            console.log('📦 All sprites loaded, showing title screen...');
             this.onSpritesLoaded();
         });
         
@@ -104,16 +109,35 @@ class ZeldaGame {
         });
     }
     
+    calculateCameraPosition() {
+        let cameraX = 0;
+        let cameraY = 0;
+        
+        if (this.player && this.gameMap) {
+            // Center camera on player
+            cameraX = (this.canvas.width / this.zoom / 2) - this.player.x;
+            cameraY = (this.canvas.height / this.zoom / 2) - this.player.y;
+            
+            // Clamp camera to map boundaries (same as render method)
+            const mapWidth = this.gameMap.width * this.gameMap.tileSize;
+            const mapHeight = this.gameMap.height * this.gameMap.tileSize;
+            
+            cameraX = Math.min(0, Math.max(cameraX, (this.canvas.width / this.zoom) - mapWidth));
+            cameraY = Math.min(0, Math.max(cameraY, (this.canvas.height / this.zoom) - mapHeight));
+        }
+        
+        return { x: cameraX, y: cameraY };
+    }
+    
     updateWorldMouseCoordinates() {
         if (!this.player) return;
         
-        // Calculate camera offset
-        const cameraX = (this.canvas.width / this.zoom / 2) - this.player.x;
-        const cameraY = (this.canvas.height / this.zoom / 2) - this.player.y;
+        // Get the actual camera position used in rendering
+        const camera = this.calculateCameraPosition();
         
         // Convert screen coordinates to world coordinates
-        this.worldMouseX = (this.mouseX / this.zoom) - cameraX;
-        this.worldMouseY = (this.mouseY / this.zoom) - cameraY;
+        this.worldMouseX = (this.mouseX / this.zoom) - camera.x;
+        this.worldMouseY = (this.mouseY / this.zoom) - camera.y;
     }
     
     handleMouseDown() {
@@ -152,11 +176,43 @@ class ZeldaGame {
         );
         
         this.projectiles.push(fireball);
-        console.log(`🔥 ${projectileType} shot from staff towards:`, this.worldMouseX, this.worldMouseY);
+        console.log(`🔥 ${projectileType} shot from staff at (${staffOffset.x}, ${staffOffset.y}) towards: (${this.worldMouseX}, ${this.worldMouseY})`);
+        console.log(`📍 Mouse screen: (${this.mouseX}, ${this.mouseY}), Camera: (${this.calculateCameraPosition().x}, ${this.calculateCameraPosition().y}), Zoom: ${this.zoom}`);
     }
 
     setupDebugControls() {
         document.addEventListener('keydown', (e) => {
+            // Escape key - toggle pause menu
+            if (e.code === 'Escape') {
+                e.preventDefault();
+                if (this.gameState === 'playing') {
+                    this.gameState = 'paused';
+                    console.log('Game paused');
+                } else if (this.gameState === 'paused') {
+                    this.gameState = 'playing';
+                    console.log('Game resumed');
+                }
+            }
+            
+            // Pause menu controls
+            if (this.gameState === 'paused') {
+                if (e.code === 'KeyS') {
+                    e.preventDefault();
+                    this.saveGame();
+                }
+                if (e.code === 'KeyQ') {
+                    e.preventDefault();
+                    this.quitToTitle();
+                }
+            }
+            
+            // Enter key - start game from title screen
+            if (e.code === 'Enter' || e.code === 'Space') {
+                if (this.gameState === 'title') {
+                    this.startGame();
+                }
+            }
+            
             if (e.code === 'F1') {
                 e.preventDefault();
                 window.DEBUG_MODE = !window.DEBUG_MODE;
@@ -214,8 +270,20 @@ class ZeldaGame {
     }
 
     onSpritesLoaded() {
-        console.log('✅ Sprites loaded, creating game world...');
+        console.log('✅ Sprites loaded, ready to show title screen...');
         this.errorMessage = ''; // Clear any previous error messages
+        
+        // Start render loop to show title screen
+        this.isRunning = true;
+        this.lastTime = performance.now();
+        this.gameLoop();
+        
+        console.log('🎮 Title screen ready! Press ENTER or SPACE to start');
+    }
+    
+    startGame() {
+        console.log('🎮 Starting new game...');
+        this.gameState = 'playing';
         
         try {
             // Create rooms
@@ -240,23 +308,12 @@ class ZeldaGame {
             this.player.inventory = this.inventory;
             console.log('✅ Inventory connected to player');
             
-            // Start game loop
-            console.log('🎮 Starting game loop...');
-            this.isRunning = true;
-            this.lastTime = performance.now();
-            this.gameLoop();
-            
-            console.log('🎯 Game started! Use WASD or Arrow Keys to move');
+            console.log('🎯 Game started! Use WASD to move, ESC to pause');
             console.log('💡 Press F1 to toggle debug mode');
             
         } catch (error) {
-            console.error('❌ Error initializing game:', error);
-            console.error('Error details:', error.stack);
-            this.errorMessage = `Game Init Error: ${error.message}`;
-            // Still start the game loop to show error
-            this.isRunning = true;
-            this.lastTime = performance.now();
-            this.gameLoop();
+            console.error('❌ Error starting game:', error);
+            this.errorMessage = `Game Start Error: ${error.message}`;
         }
     }
 
@@ -291,7 +348,8 @@ class ZeldaGame {
     }
 
     update(deltaTime) {
-        if (this.player && this.gameMap) {
+        // Only update game logic when playing
+        if (this.gameState === 'playing' && this.player && this.gameMap) {
             this.player.update(deltaTime, this.gameMap);
             
             // Check for room transitions
@@ -307,12 +365,14 @@ class ZeldaGame {
             }
         }
         
-        // Update projectiles
-        this.updateProjectiles(deltaTime);
-        
-        // Update fire tiles (remove expired ones)
-        if (this.gameMap && this.gameMap.updateFireTiles) {
-            this.gameMap.updateFireTiles(deltaTime);
+        // Update projectiles and fire tiles only when playing
+        if (this.gameState === 'playing') {
+            this.updateProjectiles(deltaTime);
+            
+            // Update fire tiles (remove expired ones)
+            if (this.gameMap && this.gameMap.updateFireTiles) {
+                this.gameMap.updateFireTiles(deltaTime);
+            }
         }
         
         // Update world mouse coordinates for aiming
@@ -361,29 +421,38 @@ class ZeldaGame {
             this.ctx.webkitImageSmoothingEnabled = false;
             this.ctx.mozImageSmoothingEnabled = false;
             this.ctx.msImageSmoothingEnabled = false;
+            
+            // Render based on game state
+            if (this.gameState === 'title') {
+                this.renderTitleScreen();
+                return;
+            } else if (this.gameState === 'paused') {
+                this.renderGameWorld();
+                this.renderPauseMenu();
+                return;
+            }
+            
+            // Default: render playing state
+            this.renderGameWorld();
         
+        } catch (error) {
+            console.error('❌ Render error:', error);
+            this.errorMessage = `Render Error: ${error.message}`;
+        }
+        
+        // Always render error messages or debug info if needed
+        this.renderDebugInfo();
+    }
+    
+    renderGameWorld() {
         // Apply zoom transformation
         this.ctx.save();
         this.ctx.scale(this.zoom, this.zoom);
         
         // Calculate camera position to center on player
-        let cameraX = 0;
-        let cameraY = 0;
+        const camera = this.calculateCameraPosition();
         
-        if (this.player && this.gameMap) {
-            // Center camera on player
-            cameraX = (this.canvas.width / this.zoom / 2) - this.player.x;
-            cameraY = (this.canvas.height / this.zoom / 2) - this.player.y;
-            
-            // Clamp camera to map boundaries
-            const mapWidth = this.gameMap.width * this.gameMap.tileSize;
-            const mapHeight = this.gameMap.height * this.gameMap.tileSize;
-            
-            cameraX = Math.min(0, Math.max(cameraX, (this.canvas.width / this.zoom) - mapWidth));
-            cameraY = Math.min(0, Math.max(cameraY, (this.canvas.height / this.zoom) - mapHeight));
-        }
-        
-        this.ctx.translate(cameraX, cameraY);
+        this.ctx.translate(camera.x, camera.y);
         
         // Render game map
         if (this.gameMap) {
@@ -400,18 +469,143 @@ class ZeldaGame {
             projectile.render(this.ctx);
         });
         
+        // Render mouse target indicator (debug/aiming aid)
+        if (this.player && this.inventory) {
+            const currentWeapon = this.inventory.getCurrentWeapon();
+            if (currentWeapon.id === 'staff') {
+                this.renderMouseTarget(this.ctx);
+            }
+        }
+        
         this.ctx.restore();
         
         // Render UI overlay (not zoomed)
         this.renderUI();
+    }
+    
+    renderTitleScreen() {
+        // Dark blue background
+        const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+        gradient.addColorStop(0, '#0a0a1a');
+        gradient.addColorStop(1, '#1a1a3a');
+        this.ctx.fillStyle = gradient;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
-        } catch (error) {
-            console.error('❌ Render error:', error);
-            this.errorMessage = `Render Error: ${error.message}`;
+        // Title text
+        this.ctx.textAlign = 'center';
+        this.ctx.fillStyle = '#ffaa00';
+        this.ctx.font = 'bold 72px Arial';
+        this.ctx.strokeStyle = '#cc7700';
+        this.ctx.lineWidth = 4;
+        this.ctx.strokeText('🦙 LLAMA KNIGHT', this.canvas.width / 2, 200);
+        this.ctx.fillText('🦙 LLAMA KNIGHT', this.canvas.width / 2, 200);
+        
+        // Subtitle
+        this.ctx.fillStyle = '#cccccc';
+        this.ctx.font = 'italic 32px Arial';
+        this.ctx.fillText('Adventure Awaits', this.canvas.width / 2, 260);
+        
+        // Instructions
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '24px Arial';
+        this.ctx.fillText('Press ENTER or SPACE to Start New Game', this.canvas.width / 2, 380);
+        
+        // Check if save exists
+        const hasSave = localStorage.getItem('llamaKnightSave') !== null;
+        if (hasSave) {
+            this.ctx.fillStyle = '#88ff88';
+            this.ctx.font = '20px Arial';
+            this.ctx.fillText('Press L to Load Saved Game', this.canvas.width / 2, 420);
         }
         
-        // Always render error messages or debug info if needed
-        this.renderDebugInfo();
+        // Game info
+        this.ctx.fillStyle = '#888888';
+        this.ctx.font = '16px Arial';
+        this.ctx.fillText('• Explore magical worlds with your trusty llama knight', this.canvas.width / 2, 480);
+        this.ctx.fillText('• Collect armor and magical staffs', this.canvas.width / 2, 510);
+        this.ctx.fillText('• Cast powerful charged fireballs', this.canvas.width / 2, 540);
+        this.ctx.fillText('• Use WASD to move, Mouse to aim & shoot', this.canvas.width / 2, 570);
+        
+        // Version info
+        this.ctx.fillStyle = '#555555';
+        this.ctx.font = '12px Arial';
+        this.ctx.fillText('v1.0 - Press F1 for debug mode', this.canvas.width / 2, this.canvas.height - 20);
+    }
+    
+    renderPauseMenu() {
+        // Semi-transparent overlay
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Menu background
+        const menuWidth = 400;
+        const menuHeight = 300;
+        const menuX = (this.canvas.width - menuWidth) / 2;
+        const menuY = (this.canvas.height - menuHeight) / 2;
+        
+        this.ctx.fillStyle = '#2c3e50';
+        this.ctx.fillRect(menuX, menuY, menuWidth, menuHeight);
+        this.ctx.strokeStyle = '#34495e';
+        this.ctx.lineWidth = 4;
+        this.ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
+        
+        // Menu title
+        this.ctx.textAlign = 'center';
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = 'bold 32px Arial';
+        this.ctx.fillText('GAME PAUSED', this.canvas.width / 2, menuY + 60);
+        
+        // Menu options
+        this.ctx.font = '20px Arial';
+        this.ctx.fillStyle = '#ecf0f1';
+        this.ctx.fillText('ESC - Resume Game', this.canvas.width / 2, menuY + 120);
+        this.ctx.fillText('S - Save Game', this.canvas.width / 2, menuY + 160);
+        this.ctx.fillText('Q - Quit to Title', this.canvas.width / 2, menuY + 200);
+        
+        // Instructions
+        this.ctx.font = '14px Arial';
+        this.ctx.fillStyle = '#bdc3c7';
+        this.ctx.fillText('Press the corresponding key to select an option', this.canvas.width / 2, menuY + 240);
+    }
+    
+    renderMouseTarget(ctx) {
+        // Show where the mouse is pointing in world coordinates
+        if (this.worldMouseX && this.worldMouseY) {
+            ctx.save();
+            
+            // Draw a crosshair at the mouse position
+            ctx.strokeStyle = '#ffff00';
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.7;
+            
+            // Crosshair lines
+            const size = 10;
+            ctx.beginPath();
+            ctx.moveTo(this.worldMouseX - size, this.worldMouseY);
+            ctx.lineTo(this.worldMouseX + size, this.worldMouseY);
+            ctx.moveTo(this.worldMouseX, this.worldMouseY - size);
+            ctx.lineTo(this.worldMouseX, this.worldMouseY + size);
+            ctx.stroke();
+            
+            // Small circle in center
+            ctx.beginPath();
+            ctx.arc(this.worldMouseX, this.worldMouseY, 3, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Draw line from staff to target (if charging)
+            if (this.player && this.player.isCharging) {
+                const staffPos = this.player.getStaffWorldPosition();
+                ctx.strokeStyle = '#ff4444';
+                ctx.lineWidth = 1;
+                ctx.globalAlpha = 0.5;
+                ctx.beginPath();
+                ctx.moveTo(staffPos.x, staffPos.y);
+                ctx.lineTo(this.worldMouseX, this.worldMouseY);
+                ctx.stroke();
+            }
+            
+            ctx.restore();
+        }
     }
     
     renderDebugInfo() {
@@ -459,6 +653,29 @@ class ZeldaGame {
         if (this.inventory) {
             this.inventory.render(this.ctx, this.canvas.width, this.canvas.height);
         }
+        
+        // Render message notifications
+        if (this.messageText && this.messageTimer > 0) {
+            const messageY = 100;
+            const messageWidth = 300;
+            const messageHeight = 60;
+            const messageX = (this.canvas.width - messageWidth) / 2;
+            
+            // Background
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            this.ctx.fillRect(messageX, messageY, messageWidth, messageHeight);
+            
+            // Border
+            this.ctx.strokeStyle = '#ffaa00';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(messageX, messageY, messageWidth, messageHeight);
+            
+            // Text
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.font = 'bold 20px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText(this.messageText, this.canvas.width / 2, messageY + 35);
+        }
     }
 
     // Public methods for game control
@@ -501,5 +718,116 @@ class ZeldaGame {
             console.log('🔮 Magic Staff added to inventory!');
         }
         // Add other item types here as needed
+    }
+    
+    saveGame() {
+        try {
+            const saveData = {
+                playerX: this.player.x,
+                playerY: this.player.y,
+                currentRoom: this.currentRoom,
+                playerHasArmor: this.player.hasArmor,
+                playerHasStaff: this.player.hasMagicStaff,
+                inventoryItems: this.inventory.items,
+                inventoryWeaponIndex: this.inventory.currentWeaponIndex,
+                collectedItems: this.gameMap.items.filter(item => item.collected).map(item => ({
+                    x: item.x,
+                    y: item.y,
+                    type: item.type
+                })),
+                saveTime: new Date().toISOString()
+            };
+            
+            localStorage.setItem('llamaKnightSave', JSON.stringify(saveData));
+            console.log('💾 Game saved successfully!');
+            
+            // Show save confirmation
+            this.showMessage('Game Saved!', 2000);
+            
+        } catch (error) {
+            console.error('❌ Error saving game:', error);
+            this.showMessage('Save Failed!', 2000);
+        }
+    }
+    
+    loadGame() {
+        try {
+            const saveData = JSON.parse(localStorage.getItem('llamaKnightSave'));
+            if (!saveData) {
+                console.log('No save data found');
+                return false;
+            }
+            
+            // Restore player position
+            this.player.x = saveData.playerX;
+            this.player.y = saveData.playerY;
+            
+            // Restore room
+            this.currentRoom = saveData.currentRoom;
+            this.gameMap = this.rooms[this.currentRoom];
+            
+            // Restore player equipment
+            if (saveData.playerHasArmor) {
+                this.player.equipArmor();
+            }
+            if (saveData.playerHasStaff) {
+                this.player.equipMagicStaff();
+            }
+            
+            // Restore inventory
+            if (saveData.inventoryItems) {
+                this.inventory.items = saveData.inventoryItems;
+            }
+            if (saveData.inventoryWeaponIndex !== undefined) {
+                this.inventory.currentWeaponIndex = saveData.inventoryWeaponIndex;
+            }
+            
+            // Restore collected items
+            if (saveData.collectedItems) {
+                saveData.collectedItems.forEach(savedItem => {
+                    const item = this.gameMap.items.find(mapItem => 
+                        mapItem.x === savedItem.x && 
+                        mapItem.y === savedItem.y && 
+                        mapItem.type === savedItem.type
+                    );
+                    if (item) {
+                        item.collected = true;
+                    }
+                });
+            }
+            
+            console.log('📂 Game loaded successfully!');
+            this.showMessage('Game Loaded!', 2000);
+            return true;
+            
+        } catch (error) {
+            console.error('❌ Error loading game:', error);
+            return false;
+        }
+    }
+    
+    quitToTitle() {
+        this.gameState = 'title';
+        
+        // Reset game objects but preserve sprite assets
+        this.player = null;
+        this.gameMap = null;
+        this.inventory = null;
+        this.projectiles = [];
+        this.rooms = {};
+        this.currentRoom = null;
+        
+        console.log('🏠 Returned to title screen');
+    }
+    
+    showMessage(text, duration = 3000) {
+        this.messageText = text;
+        this.messageTimer = duration;
+        
+        // Clear message after duration
+        setTimeout(() => {
+            this.messageText = '';
+            this.messageTimer = 0;
+        }, duration);
     }
 }
