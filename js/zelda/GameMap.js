@@ -14,7 +14,8 @@ class ZeldaGameMap {
             STONE: 2,
             WALL: 3,
             WATER: 4,
-            EXIT: 5  // Exit tiles for room transitions
+            EXIT: 5,  // Exit tiles for room transitions
+            TREE: 6   // Tree tiles for forest areas
         };
         
         // Room transitions and items
@@ -37,6 +38,12 @@ class ZeldaGameMap {
             this.generateMainRoom();
         } else if (this.roomName === 'staff_room') {
             this.generateStaffRoom();
+        } else if (this.roomName === 'forest') {
+            this.generateForestRoom();
+        } else if (this.roomName === 'grove') {
+            this.generateGroveRoom();
+        } else if (this.roomName === 'orchard') {
+            this.generateOrchardRoom();
         }
         
         console.log(`🗺️ Generated ${this.roomName} room:`, this.width, 'x', this.height);
@@ -51,6 +58,10 @@ class ZeldaGameMap {
                     // North exit for gravel path
                     if (y === 0 && x >= 10 && x <= 12) {
                         this.tiles[y][x] = this.TILE_TYPES.GRAVEL;
+                    }
+                    // West exit to forest
+                    else if (x === 0 && y >= 7 && y <= 9) {
+                        this.tiles[y][x] = this.TILE_TYPES.GRASS;
                     } else {
                         this.tiles[y][x] = this.TILE_TYPES.WALL;
                     }
@@ -78,12 +89,20 @@ class ZeldaGameMap {
             }
         }
         
-        // Add exit to north room
+        // Add exit to north room (staff room)
         this.exits.push({
             x: 11, y: 0, 
             targetRoom: 'staff_room', 
-            targetX: 11 * this.tileSize, 
-            targetY: 14 * this.tileSize
+            targetX: 11 * this.tileSize + this.tileSize / 2, 
+            targetY: 14 * this.tileSize + this.tileSize / 2
+        });
+        
+        // Add exit to west (forest room)
+        this.exits.push({
+            x: 0, y: 8,
+            targetRoom: 'forest',
+            targetX: (this.width - 3) * this.tileSize + this.tileSize / 2,
+            targetY: 8 * this.tileSize + this.tileSize / 2
         });
     }
 
@@ -123,8 +142,8 @@ class ZeldaGameMap {
         this.exits.push({
             x: 11, y: this.height - 1,
             targetRoom: 'main',
-            targetX: 11 * this.tileSize,
-            targetY: 1 * this.tileSize
+            targetX: 11 * this.tileSize + this.tileSize / 2,
+            targetY: 1 * this.tileSize + this.tileSize / 2
         });
         
         // Add magic staff item on grass near the stone altar (reachable)
@@ -133,6 +152,154 @@ class ZeldaGameMap {
             y: 7 * this.tileSize + this.tileSize / 2,  // Same height as altar
             type: 'magic_staff',
             collected: false
+        });
+    }
+    
+    generateForestRoom() {
+        // Create a forest room with scattered trees and clearings
+        for (let y = 0; y < this.height; y++) {
+            this.tiles[y] = [];
+            for (let x = 0; x < this.width; x++) {
+                // Create borders with walls
+                if (x === 0 || x === this.width - 1 || y === 0 || y === this.height - 1) {
+                    // South exit back to main
+                    if (y === this.height - 1 && x >= 9 && x <= 11) {
+                        this.tiles[y][x] = this.TILE_TYPES.GRASS;
+                    }
+                    // East exit to grove
+                    else if (x === this.width - 1 && y >= 7 && y <= 9) {
+                        this.tiles[y][x] = this.TILE_TYPES.GRASS;
+                    } else {
+                        this.tiles[y][x] = this.TILE_TYPES.WALL;
+                    }
+                }
+                // Scattered trees (random but deterministic pattern)
+                else if ((x * 7 + y * 3) % 11 === 0 && x > 2 && x < this.width - 3 && y > 2 && y < this.height - 3) {
+                    this.tiles[y][x] = this.TILE_TYPES.TREE;
+                }
+                // Small clearings around center
+                else if (Math.abs(x - 10) <= 2 && Math.abs(y - 8) <= 2) {
+                    this.tiles[y][x] = this.TILE_TYPES.GRASS;
+                }
+                // More trees in dense areas
+                else if ((x + y * 2) % 8 === 0 && x > 1 && x < this.width - 2) {
+                    this.tiles[y][x] = this.TILE_TYPES.TREE;
+                }
+                // Rest is grass
+                else {
+                    this.tiles[y][x] = this.TILE_TYPES.GRASS;
+                }
+            }
+        }
+        
+        // Add exits
+        this.exits.push({
+            x: 10, y: this.height - 1,
+            targetRoom: 'main',
+            targetX: 10 * this.tileSize + this.tileSize / 2,
+            targetY: 1 * this.tileSize + this.tileSize / 2
+        });
+        
+        this.exits.push({
+            x: this.width - 1, y: 8,
+            targetRoom: 'grove',
+            targetX: 1 * this.tileSize + this.tileSize / 2,
+            targetY: 8 * this.tileSize + this.tileSize / 2
+        });
+    }
+    
+    generateGroveRoom() {
+        // Create a grove room with dense tree clusters
+        for (let y = 0; y < this.height; y++) {
+            this.tiles[y] = [];
+            for (let x = 0; x < this.width; x++) {
+                // Create borders with walls
+                if (x === 0 || x === this.width - 1 || y === 0 || y === this.height - 1) {
+                    // West exit back to forest
+                    if (x === 0 && y >= 7 && y <= 9) {
+                        this.tiles[y][x] = this.TILE_TYPES.GRASS;
+                    }
+                    // North exit to orchard
+                    else if (y === 0 && x >= 9 && x <= 11) {
+                        this.tiles[y][x] = this.TILE_TYPES.GRASS;
+                    } else {
+                        this.tiles[y][x] = this.TILE_TYPES.WALL;
+                    }
+                }
+                // Dense tree clusters
+                else if (x < 7 || x > 14 || y < 5 || y > 11) {
+                    if ((x + y) % 3 === 0) {
+                        this.tiles[y][x] = this.TILE_TYPES.TREE;
+                    } else {
+                        this.tiles[y][x] = this.TILE_TYPES.GRASS;
+                    }
+                }
+                // Central clearing
+                else if (x >= 8 && x <= 12 && y >= 6 && y <= 10) {
+                    this.tiles[y][x] = this.TILE_TYPES.GRASS;
+                }
+                // Scattered trees in middle areas
+                else if ((x * 5 + y * 7) % 13 === 0) {
+                    this.tiles[y][x] = this.TILE_TYPES.TREE;
+                }
+                // Rest is grass
+                else {
+                    this.tiles[y][x] = this.TILE_TYPES.GRASS;
+                }
+            }
+        }
+        
+        // Add exits
+        this.exits.push({
+            x: 0, y: 8,
+            targetRoom: 'forest',
+            targetX: (this.width - 2) * this.tileSize + this.tileSize / 2,
+            targetY: 8 * this.tileSize + this.tileSize / 2
+        });
+        
+        this.exits.push({
+            x: 10, y: 0,
+            targetRoom: 'orchard',
+            targetX: 10 * this.tileSize + this.tileSize / 2,
+            targetY: (this.height - 2) * this.tileSize + this.tileSize / 2
+        });
+    }
+    
+    generateOrchardRoom() {
+        // Create an orchard room with organized tree rows
+        for (let y = 0; y < this.height; y++) {
+            this.tiles[y] = [];
+            for (let x = 0; x < this.width; x++) {
+                // Create borders with walls
+                if (x === 0 || x === this.width - 1 || y === 0 || y === this.height - 1) {
+                    // South exit back to grove
+                    if (y === this.height - 1 && x >= 9 && x <= 11) {
+                        this.tiles[y][x] = this.TILE_TYPES.GRASS;
+                    } else {
+                        this.tiles[y][x] = this.TILE_TYPES.WALL;
+                    }
+                }
+                // Organized tree rows (every 3rd column and row)
+                else if (x % 3 === 1 && y % 3 === 1 && x > 2 && x < this.width - 3 && y > 2 && y < this.height - 3) {
+                    this.tiles[y][x] = this.TILE_TYPES.TREE;
+                }
+                // Pathways between tree rows
+                else if (x % 3 === 0 || y % 3 === 0) {
+                    this.tiles[y][x] = this.TILE_TYPES.GRAVEL;
+                }
+                // Rest is grass
+                else {
+                    this.tiles[y][x] = this.TILE_TYPES.GRASS;
+                }
+            }
+        }
+        
+        // Add exit back to grove
+        this.exits.push({
+            x: 10, y: this.height - 1,
+            targetRoom: 'grove',
+            targetX: 10 * this.tileSize + this.tileSize / 2,
+            targetY: 1 * this.tileSize + this.tileSize / 2
         });
     }
 
@@ -144,7 +311,10 @@ class ZeldaGameMap {
     }
 
     isSolid(tileType) {
-        return tileType === this.TILE_TYPES.WALL || tileType === this.TILE_TYPES.WATER || tileType === this.TILE_TYPES.STONE;
+        return tileType === this.TILE_TYPES.WALL || 
+               tileType === this.TILE_TYPES.WATER || 
+               tileType === this.TILE_TYPES.STONE || 
+               tileType === this.TILE_TYPES.TREE;
     }
     
     isValidTile(x, y) {
@@ -361,6 +531,10 @@ class ZeldaGameMap {
                 color = '#3498db';
                 sprite = this.spriteLoader.get('water');
                 break;
+            case this.TILE_TYPES.TREE:
+                color = '#2d5016'; // Dark green for trees
+                // Trees will be rendered with a simple green circle/rectangle for now
+                break;
             default:
                 color = '#ff00ff'; // Magenta for unknown tiles
         }
@@ -390,6 +564,27 @@ class ZeldaGameMap {
             ctx.fillStyle = `rgba(173, 216, 230, ${0.1 + shimmer})`;
             ctx.fillRect(x, y, this.tileSize, this.tileSize);
         }
+        
+        // Special tree rendering
+        if (tileType === this.TILE_TYPES.TREE) {
+            // Draw tree trunk (brown)
+            ctx.fillStyle = '#654321';
+            const trunkWidth = this.tileSize * 0.3;
+            const trunkHeight = this.tileSize * 0.6;
+            ctx.fillRect(x + (this.tileSize - trunkWidth) / 2, y + this.tileSize - trunkHeight, trunkWidth, trunkHeight);
+            
+            // Draw tree crown (green)
+            ctx.fillStyle = '#228B22';
+            const crownRadius = this.tileSize * 0.4;
+            ctx.beginPath();
+            ctx.arc(x + this.tileSize / 2, y + this.tileSize * 0.4, crownRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Add some depth with a darker outline
+            ctx.strokeStyle = '#006400';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
     }
 
     // Get player spawn position (safe walkable area)
@@ -399,6 +594,12 @@ class ZeldaGameMap {
             return this.getMainRoomSpawn();
         } else if (this.roomName === 'staff_room') {
             return this.getStaffRoomSpawn();
+        } else if (this.roomName === 'forest') {
+            return { x: 10 * this.tileSize, y: 8 * this.tileSize }; // Center clearing
+        } else if (this.roomName === 'grove') {
+            return { x: 10 * this.tileSize, y: 8 * this.tileSize }; // Central clearing
+        } else if (this.roomName === 'orchard') {
+            return { x: 10 * this.tileSize, y: 8 * this.tileSize }; // Between tree rows
         }
         
         // Fallback - find any safe grass tile

@@ -15,6 +15,7 @@ class ZeldaProjectile {
         this.speed = this.isCharged ? 200 : 300; // pixels per second
         this.velocityX = (dx / distance) * this.speed;
         this.velocityY = (dy / distance) * this.speed;
+        this.damage = this.isCharged ? 25 : 15; // Damage amount
         
         // Visual properties
         this.size = this.isCharged ? 12 : 8;

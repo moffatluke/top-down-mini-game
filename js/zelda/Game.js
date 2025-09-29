@@ -6,12 +6,15 @@ class ZeldaGame {
         this.debugElement = document.getElementById('debug');
         
         // Game state
-        this.gameState = 'title'; // 'title', 'playing', 'paused'
+        this.gameState = 'title'; // 'title', 'playing', 'paused', 'gameover'
         this.isRunning = false;
         this.lastTime = 0;
         this.fps = 0;
         this.frameCount = 0;
         this.fpsTimer = 0;
+        
+        // Input tracking
+        this.keys = {};
         
         // Camera and zoom
         this.zoom = 1.5;  // Zoom level for better detail visibility
@@ -22,6 +25,8 @@ class ZeldaGame {
         this.player = null;
         this.inventory = null;
         this.projectiles = [];
+        this.particleSystem = null;
+        this.enemies = [];
         
         // Mouse input
         this.mouseX = 0;
@@ -33,12 +38,18 @@ class ZeldaGame {
         this.currentRoom = 'main';
         this.rooms = {};
         
+        // Title screen background
+        this.titleBackground = null;
+        
         // Debug mode
         window.DEBUG_MODE = false;
         
         // Message system
         this.messageText = '';
         this.messageTimer = 0;
+        
+        // Background images
+        this.titleBackground = null;
         
         this.init();
     }
@@ -66,18 +77,54 @@ class ZeldaGame {
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         console.log('✅ Canvas cleared with test color');
         
+        // Add loading text
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '24px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('Loading Llama Knight Adventure...', this.canvas.width / 2, this.canvas.height / 2);
+        
         // Setup input handlers
         this.setupMouseControls();
         
-        // Load sprites first
+        // Load sprites first, then load background, then start
         this.spriteLoader = new SpriteLoader();
         this.spriteLoader.load(() => {
-            console.log('📦 All sprites loaded, showing title screen...');
-            this.onSpritesLoaded();
+            console.log('📦 All sprites loaded, loading title background...');
+            try {
+                this.loadTitleBackground();
+            } catch (error) {
+                console.error('❌ Error loading title background:', error);
+                // Fallback: start game without background
+                this.onSpritesLoaded();
+            }
         });
         
         // Setup debug controls
         this.setupDebugControls();
+    }
+    
+    loadTitleBackground() {
+        this.titleBackground = new Image();
+        
+        // Set up a timeout fallback in case image doesn't load
+        const fallbackTimer = setTimeout(() => {
+            console.warn('⚠️ Title background loading timeout, starting without background...');
+            this.onSpritesLoaded();
+        }, 3000); // 3 second timeout
+        
+        this.titleBackground.onload = () => {
+            clearTimeout(fallbackTimer);
+            console.log('🖼️ Title background loaded, starting game...');
+            this.onSpritesLoaded();
+        };
+        this.titleBackground.onerror = () => {
+            clearTimeout(fallbackTimer);
+            console.warn('⚠️ Could not load title background, using default...');
+            this.onSpritesLoaded();
+        };
+        
+        console.log('🔄 Loading title background from: assets/images/title-background.png');
+        this.titleBackground.src = 'assets/images/title-background.png';
     }
 
     setupMouseControls() {
@@ -182,6 +229,19 @@ class ZeldaGame {
 
     setupDebugControls() {
         document.addEventListener('keydown', (e) => {
+            // Track all key states
+            this.keys[e.code] = true;
+            
+            // Update player keys if in game
+            if (this.player && this.gameState === 'playing') {
+                this.player.keys[e.code] = true;
+            }
+            
+            // Prevent default behavior for space key to avoid page scrolling
+            if (e.code === 'Space') {
+                e.preventDefault();
+            }
+            
             // Escape key - toggle pause menu
             if (e.code === 'Escape') {
                 e.preventDefault();
@@ -206,10 +266,35 @@ class ZeldaGame {
                 }
             }
             
-            // Enter key - start game from title screen
-            if (e.code === 'Enter' || e.code === 'Space') {
-                if (this.gameState === 'title') {
+            // Title screen controls
+            if (this.gameState === 'title') {
+                // Enter/Space - start new game
+                if (e.code === 'Enter' || e.code === 'Space') {
+                    e.preventDefault();
                     this.startGame();
+                }
+                // L key - load saved game
+                if (e.code === 'KeyL') {
+                    e.preventDefault();
+                    if (this.loadAndStartGame()) {
+                        console.log('Loading saved game...');
+                    } else {
+                        this.showMessage('No Save Found!', 2000);
+                    }
+                }
+            }
+            
+            // Game over screen controls
+            if (this.gameState === 'gameover') {
+                // R key - restart from last save
+                if (e.code === 'KeyR') {
+                    e.preventDefault();
+                    this.restartFromSave();
+                }
+                // Q key - quit to title screen
+                if (e.code === 'KeyQ') {
+                    e.preventDefault();
+                    this.quitToTitle();
                 }
             }
             
@@ -267,6 +352,21 @@ class ZeldaGame {
                 }
             }
         });
+        
+        document.addEventListener('keyup', (e) => {
+            // Track all key states
+            this.keys[e.code] = false;
+            
+            // Update player keys if in game
+            if (this.player && this.gameState === 'playing') {
+                this.player.keys[e.code] = false;
+            }
+            
+            // Prevent default behavior for space key
+            if (e.code === 'Space') {
+                e.preventDefault();
+            }
+        });
     }
 
     onSpritesLoaded() {
@@ -291,8 +391,14 @@ class ZeldaGame {
             this.rooms['main'] = new ZeldaGameMap(this.spriteLoader, 'main');
             console.log('📍 Creating staff room...');
             this.rooms['staff_room'] = new ZeldaGameMap(this.spriteLoader, 'staff_room');
+            console.log('📍 Creating forest room...');
+            this.rooms['forest'] = new ZeldaGameMap(this.spriteLoader, 'forest');
+            console.log('📍 Creating grove room...');
+            this.rooms['grove'] = new ZeldaGameMap(this.spriteLoader, 'grove');
+            console.log('📍 Creating orchard room...');
+            this.rooms['orchard'] = new ZeldaGameMap(this.spriteLoader, 'orchard');
             this.gameMap = this.rooms[this.currentRoom];
-            console.log('✅ Rooms created successfully');
+            console.log('✅ All rooms created successfully');
             
             // Create player at spawn position
             console.log('🦙 Creating player...');
@@ -304,9 +410,18 @@ class ZeldaGame {
             console.log('🎒 Creating inventory...');
             this.inventory = new ZeldaInventory(this.spriteLoader);
             
-            // Connect player to inventory
+            // Create particle system
+            console.log('✨ Creating particle system...');
+            this.particleSystem = new ParticleSystem();
+            
+            // Connect player to inventory and particle system
             this.player.inventory = this.inventory;
-            console.log('✅ Inventory connected to player');
+            this.player.particleSystem = this.particleSystem;
+            console.log('✅ Inventory and particle system connected to player');
+            
+            // Spawn enemies
+            console.log('👹 Spawning enemies...');
+            this.spawnEnemies();
             
             console.log('🎯 Game started! Use WASD to move, ESC to pause');
             console.log('💡 Press F1 to toggle debug mode');
@@ -314,6 +429,43 @@ class ZeldaGame {
         } catch (error) {
             console.error('❌ Error starting game:', error);
             this.errorMessage = `Game Start Error: ${error.message}`;
+        }
+    }
+    
+    loadAndStartGame() {
+        try {
+            // Create rooms first
+            console.log('📍 Creating main room...');
+            this.rooms['main'] = new ZeldaGameMap(this.spriteLoader, 'main');
+            console.log('📍 Creating staff room...');
+            this.rooms['staff_room'] = new ZeldaGameMap(this.spriteLoader, 'staff_room');
+            console.log('📍 Creating forest room...');
+            this.rooms['forest'] = new ZeldaGameMap(this.spriteLoader, 'forest');
+            console.log('📍 Creating grove room...');
+            this.rooms['grove'] = new ZeldaGameMap(this.spriteLoader, 'grove');
+            console.log('📍 Creating orchard room...');
+            this.rooms['orchard'] = new ZeldaGameMap(this.spriteLoader, 'orchard');
+            this.gameMap = this.rooms[this.currentRoom];
+            
+            // Create player and inventory (will be overwritten by load)
+            const spawnPos = this.gameMap.getSpawnPosition();
+            this.player = new ZeldaPlayer(spawnPos.x, spawnPos.y, this.spriteLoader);
+            this.inventory = new ZeldaInventory(this.spriteLoader);
+            this.particleSystem = new ParticleSystem();
+            this.player.inventory = this.inventory;
+            this.player.particleSystem = this.particleSystem;
+            
+            // Try to load saved data
+            if (this.loadGame()) {
+                // Successfully loaded - start playing
+                this.gameState = 'playing';
+                console.log('🎮 Loaded saved game successfully!');
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('❌ Error loading game:', error);
+            return false;
         }
     }
 
@@ -368,10 +520,17 @@ class ZeldaGame {
         // Update projectiles and fire tiles only when playing
         if (this.gameState === 'playing') {
             this.updateProjectiles(deltaTime);
+            this.updateEnemies(deltaTime);
+            this.checkCombat();
             
             // Update fire tiles (remove expired ones)
             if (this.gameMap && this.gameMap.updateFireTiles) {
                 this.gameMap.updateFireTiles(deltaTime);
+            }
+            
+            // Update particle system
+            if (this.particleSystem) {
+                this.particleSystem.update(deltaTime);
             }
         }
         
@@ -410,6 +569,149 @@ class ZeldaGame {
         }
     }
 
+    updateEnemies(deltaTime) {
+        // Update each enemy
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+            const enemy = this.enemies[i];
+            enemy.update(deltaTime, this.player, this.gameMap);
+            
+            // Remove dead enemies
+            if (enemy.aiState === 'dead' && enemy.health <= 0) {
+                this.enemies.splice(i, 1);
+                console.log('🪦 Dead enemy removed');
+            }
+        }
+    }
+
+    checkCombat() {
+        if (!this.player || this.enemies.length === 0) return;
+        
+        // Check projectile vs enemy collisions
+        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+            const projectile = this.projectiles[i];
+            if (!projectile.active) continue;
+            
+            for (let j = this.enemies.length - 1; j >= 0; j--) {
+                const enemy = this.enemies[j];
+                if (enemy.aiState === 'dead') continue;
+                
+                // Check collision
+                if (enemy.checkCollision(projectile.x - projectile.size/2, 
+                                       projectile.y - projectile.size/2, 
+                                       projectile.size, 
+                                       projectile.size)) {
+                    
+                    // Deal damage to enemy
+                    const enemyDied = enemy.takeDamage(projectile.damage, projectile.x, projectile.y);
+                    
+                    // Remove projectile
+                    projectile.active = false;
+                    
+                    // Create explosion effect for charged fireballs
+                    if (projectile.isCharged && projectile.explosionRadius > 0) {
+                        this.createExplosion(projectile.x, projectile.y, projectile.explosionRadius);
+                        
+                        // Damage other nearby enemies
+                        for (let k = 0; k < this.enemies.length; k++) {
+                            if (k === j) continue; // Skip the enemy we already hit
+                            const otherEnemy = this.enemies[k];
+                            if (otherEnemy.aiState === 'dead') continue;
+                            
+                            const distance = Math.sqrt(
+                                Math.pow(otherEnemy.x - projectile.x, 2) + 
+                                Math.pow(otherEnemy.y - projectile.y, 2)
+                            );
+                            
+                            if (distance <= projectile.explosionRadius) {
+                                otherEnemy.takeDamage(Math.floor(projectile.damage * 0.7), projectile.x, projectile.y);
+                            }
+                        }
+                    }
+                    
+                    break; // Projectile can only hit one enemy at a time
+                }
+            }
+        }
+    }
+
+    updateEnemies(deltaTime) {
+        // Update all enemies
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+            const enemy = this.enemies[i];
+            enemy.update(deltaTime, this.player, this.gameMap);
+            
+            // Remove dead enemies
+            if (enemy.aiState === 'dead') {
+                console.log(`💀 ${enemy.type} defeated!`);
+                this.enemies.splice(i, 1);
+            }
+        }
+    }
+
+    checkCombat() {
+        if (!this.player) return;
+        
+        // Check projectile vs enemy collisions
+        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+            const projectile = this.projectiles[i];
+            if (!projectile.active) continue;
+            
+            for (let j = 0; j < this.enemies.length; j++) {
+                const enemy = this.enemies[j];
+                if (enemy.aiState === 'dead') continue;
+                
+                // Check collision between projectile and enemy
+                if (projectile.checkCollision(enemy)) {
+                    // Deal damage to enemy
+                    const died = enemy.takeDamage(projectile.damage, projectile.x, projectile.y);
+                    
+                    // Remove projectile
+                    projectile.active = false;
+                    
+                    // Create explosion if charged fireball
+                    if (projectile.isCharged) {
+                        this.createExplosion(projectile.x, projectile.y, projectile.explosionRadius);
+                        
+                        // Damage other nearby enemies
+                        for (let k = 0; k < this.enemies.length; k++) {
+                            if (k === j) continue; // Skip the enemy already hit
+                            
+                            const otherEnemy = this.enemies[k];
+                            if (otherEnemy.aiState === 'dead') continue;
+                            
+                            const distance = Math.sqrt(
+                                Math.pow(otherEnemy.x - projectile.x, 2) + 
+                                Math.pow(otherEnemy.y - projectile.y, 2)
+                            );
+                            
+                            if (distance <= projectile.explosionRadius) {
+                                const explosionDamage = Math.round(projectile.damage * 0.7); // 70% damage from explosion
+                                otherEnemy.takeDamage(explosionDamage, projectile.x, projectile.y);
+                                console.log(`💥 Explosion hit ${otherEnemy.type} for ${explosionDamage} damage!`);
+                            }
+                        }
+                    }
+                    
+                    break; // Projectile can only hit one enemy directly
+                }
+            }
+        }
+    }
+
+    createExplosion(x, y, radius) {
+        // Create explosion particles
+        if (this.particleSystem) {
+            // Create a burst of explosion particles
+            for (let i = 0; i < 20; i++) {
+                const angle = (Math.PI * 2 * i) / 20;
+                this.particleSystem.createWindBurst(x, y, 'explosion', 8);
+            }
+        }
+        
+        // Visual feedback
+        console.log(`💥 Explosion at (${Math.round(x)}, ${Math.round(y)}) with radius ${radius}`);
+    }
+
     render() {
         try {
             // Clear canvas
@@ -429,6 +731,9 @@ class ZeldaGame {
             } else if (this.gameState === 'paused') {
                 this.renderGameWorld();
                 this.renderPauseMenu();
+                return;
+            } else if (this.gameState === 'gameover') {
+                this.renderGameOverScreen();
                 return;
             }
             
@@ -464,10 +769,20 @@ class ZeldaGame {
             this.player.render(this.ctx);
         }
         
+        // Render enemies
+        this.enemies.forEach(enemy => {
+            enemy.render(this.ctx);
+        });
+        
         // Render projectiles
         this.projectiles.forEach(projectile => {
             projectile.render(this.ctx);
         });
+        
+        // Render particles (wind effects, etc.)
+        if (this.particleSystem) {
+            this.particleSystem.render(this.ctx);
+        }
         
         // Render mouse target indicator (debug/aiming aid)
         if (this.player && this.inventory) {
@@ -484,21 +799,31 @@ class ZeldaGame {
     }
     
     renderTitleScreen() {
-        // Dark blue background
-        const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
-        gradient.addColorStop(0, '#0a0a1a');
-        gradient.addColorStop(1, '#1a1a3a');
-        this.ctx.fillStyle = gradient;
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        // Background image or gradient fallback
+        if (this.titleBackground && this.titleBackground.complete) {
+            // Draw the background image, scaled to fit the canvas
+            this.ctx.drawImage(this.titleBackground, 0, 0, this.canvas.width, this.canvas.height);
+            
+            // Add subtle dark overlay for better text readability
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        } else {
+            // Fallback: Dark blue gradient background
+            const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+            gradient.addColorStop(0, '#0a0a1a');
+            gradient.addColorStop(1, '#1a1a3a');
+            this.ctx.fillStyle = gradient;
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        }
         
-        // Title text
+        // Title text (removed llama emoji)
         this.ctx.textAlign = 'center';
         this.ctx.fillStyle = '#ffaa00';
         this.ctx.font = 'bold 72px Arial';
         this.ctx.strokeStyle = '#cc7700';
         this.ctx.lineWidth = 4;
-        this.ctx.strokeText('🦙 LLAMA KNIGHT', this.canvas.width / 2, 200);
-        this.ctx.fillText('🦙 LLAMA KNIGHT', this.canvas.width / 2, 200);
+        this.ctx.strokeText('LLAMA KNIGHT', this.canvas.width / 2, 200);
+        this.ctx.fillText('LLAMA KNIGHT', this.canvas.width / 2, 200);
         
         // Subtitle
         this.ctx.fillStyle = '#cccccc';
@@ -566,6 +891,66 @@ class ZeldaGame {
         this.ctx.font = '14px Arial';
         this.ctx.fillStyle = '#bdc3c7';
         this.ctx.fillText('Press the corresponding key to select an option', this.canvas.width / 2, menuY + 240);
+    }
+    
+    renderGameOverScreen() {
+        // Dark red overlay
+        this.ctx.fillStyle = 'rgba(50, 0, 0, 0.8)';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Game over panel
+        const panelWidth = 500;
+        const panelHeight = 350;
+        const panelX = (this.canvas.width - panelWidth) / 2;
+        const panelY = (this.canvas.height - panelHeight) / 2;
+        
+        // Panel background
+        this.ctx.fillStyle = '#2c1810';
+        this.ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+        this.ctx.strokeStyle = '#5d4037';
+        this.ctx.lineWidth = 6;
+        this.ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+        
+        // Inner border
+        this.ctx.strokeStyle = '#8d6e63';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(panelX + 10, panelY + 10, panelWidth - 20, panelHeight - 20);
+        
+        // Game Over title
+        this.ctx.textAlign = 'center';
+        this.ctx.fillStyle = '#d32f2f';
+        this.ctx.font = 'bold 48px Arial';
+        this.ctx.strokeStyle = '#b71c1c';
+        this.ctx.lineWidth = 3;
+        this.ctx.strokeText('GAME OVER', this.canvas.width / 2, panelY + 80);
+        this.ctx.fillText('GAME OVER', this.canvas.width / 2, panelY + 80);
+        
+        // Death message
+        this.ctx.fillStyle = '#ffcccc';
+        this.ctx.font = 'italic 24px Arial';
+        this.ctx.fillText('The Llama Knight has fallen...', this.canvas.width / 2, panelY + 130);
+        
+        // Options
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = 'bold 22px Arial';
+        this.ctx.fillText('R - Restart from Last Save', this.canvas.width / 2, panelY + 190);
+        
+        this.ctx.fillStyle = '#cccccc';
+        this.ctx.font = '22px Arial';
+        this.ctx.fillText('Q - Return to Title Screen', this.canvas.width / 2, panelY + 230);
+        
+        // Instructions
+        this.ctx.fillStyle = '#999999';
+        this.ctx.font = '16px Arial';
+        this.ctx.fillText('Press the corresponding key to select an option', this.canvas.width / 2, panelY + 280);
+        
+        // Save status
+        const hasSave = localStorage.getItem('llamaKnightSave') !== null;
+        if (!hasSave) {
+            this.ctx.fillStyle = '#ff9999';
+            this.ctx.font = '14px Arial';
+            this.ctx.fillText('(No save file found - restart will begin new game)', this.canvas.width / 2, panelY + 310);
+        }
     }
     
     renderMouseTarget(ctx) {
@@ -654,6 +1039,12 @@ class ZeldaGame {
             this.inventory.render(this.ctx, this.canvas.width, this.canvas.height);
         }
         
+        // Render stamina bar
+        this.renderStaminaBar();
+        
+        // Render health bar
+        this.renderHealthBar();
+        
         // Render message notifications
         if (this.messageText && this.messageTimer > 0) {
             const messageY = 100;
@@ -676,6 +1067,106 @@ class ZeldaGame {
             this.ctx.textAlign = 'center';
             this.ctx.fillText(this.messageText, this.canvas.width / 2, messageY + 35);
         }
+    }
+    
+    renderStaminaBar() {
+        if (!this.player) return;
+        
+        // Stamina bar properties
+        const barWidth = 200;
+        const barHeight = 12;
+        const barX = 20; // Left side of screen
+        const barY = 50; // Below any existing UI
+        
+        // Background bar
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        this.ctx.fillRect(barX, barY, barWidth, barHeight);
+        
+        // Border
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(barX, barY, barWidth, barHeight);
+        
+        // Stamina fill (color changes based on stamina level)
+        const staminaPercent = this.player.currentStamina / this.player.maxStamina;
+        const fillWidth = barWidth * staminaPercent;
+        
+        // Choose color based on stamina level
+        let fillColor;
+        if (staminaPercent > 0.6) {
+            fillColor = '#00ff88'; // Green - good stamina
+        } else if (staminaPercent > 0.3) {
+            fillColor = '#ffaa00'; // Orange - medium stamina
+        } else {
+            fillColor = '#ff4444'; // Red - low stamina
+        }
+        
+        this.ctx.fillStyle = fillColor;
+        this.ctx.fillRect(barX + 1, barY + 1, fillWidth - 2, barHeight - 2);
+        
+        // Stamina text label
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '12px Arial';
+        this.ctx.textAlign = 'left';
+        this.ctx.fillText('STAMINA', barX, barY - 5);
+        
+        // Stamina value text (optional)
+        this.ctx.font = '10px Arial';
+        this.ctx.fillStyle = '#cccccc';
+        this.ctx.textAlign = 'right';
+        this.ctx.fillText(`${Math.ceil(this.player.currentStamina)}/${this.player.maxStamina}`, barX + barWidth, barY - 5);
+    }
+
+    renderHealthBar() {
+        if (!this.player) return;
+        
+        // Health bar properties
+        const barWidth = 200;
+        const barHeight = 12;
+        const barX = 20; // Left side of screen, same as stamina
+        const barY = 25; // Above stamina bar
+        
+        // Background bar
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        this.ctx.fillRect(barX, barY, barWidth, barHeight);
+        
+        // Border
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(barX, barY, barWidth, barHeight);
+        
+        // Health fill (color changes based on health level)
+        const healthPercent = this.player.currentHealth / this.player.maxHealth;
+        const fillWidth = barWidth * healthPercent;
+        
+        let fillColor;
+        if (healthPercent > 0.6) {
+            fillColor = '#ff4444'; // Red - health (classic Zelda style)
+        } else if (healthPercent > 0.3) {
+            fillColor = '#ff6666'; // Light red - medium health
+        } else {
+            fillColor = '#ff8888'; // Lighter red - low health
+        }
+        
+        // Flash when hurt
+        if (this.player.hurtTimer > 0) {
+            fillColor = '#ffffff'; // Flash white when taking damage
+        }
+        
+        this.ctx.fillStyle = fillColor;
+        this.ctx.fillRect(barX + 1, barY + 1, fillWidth - 2, barHeight - 2);
+        
+        // Health text label
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '12px Arial';
+        this.ctx.textAlign = 'left';
+        this.ctx.fillText('HEALTH', barX, barY - 5);
+        
+        // Health value text
+        this.ctx.font = '10px Arial';
+        this.ctx.fillStyle = '#cccccc';
+        this.ctx.textAlign = 'right';
+        this.ctx.fillText(`${Math.ceil(this.player.currentHealth)}/${this.player.maxHealth}`, barX + barWidth, barY - 5);
     }
 
     // Public methods for game control
@@ -705,6 +1196,9 @@ class ZeldaGame {
             this.gameMap = this.rooms[roomName];
             this.player.x = targetX;
             this.player.y = targetY;
+            
+            // Respawn enemies for the new room
+            this.spawnEnemies();
         }
     }
 
@@ -720,26 +1214,57 @@ class ZeldaGame {
         // Add other item types here as needed
     }
     
+    spawnEnemies() {
+        this.enemies = []; // Clear existing enemies
+        
+        // Spawn animals in different rooms
+        if (this.currentRoom === 'main') {
+            // Main room - peaceful animals and a fox
+            this.enemies.push(new ZeldaEnemy(200, 150, 'rabbit'));
+            this.enemies.push(new ZeldaEnemy(400, 300, 'rabbit'));
+            this.enemies.push(new ZeldaEnemy(150, 400, 'fox'));
+        } else if (this.currentRoom === 'forest') {
+            // Forest room - wild animals
+            this.enemies.push(new ZeldaEnemy(120, 200, 'wolf'));
+            this.enemies.push(new ZeldaEnemy(350, 180, 'rabbit'));
+            this.enemies.push(new ZeldaEnemy(280, 350, 'fox'));
+            this.enemies.push(new ZeldaEnemy(450, 250, 'wolf'));
+        } else if (this.currentRoom === 'grove') {
+            // Grove room - mixed forest animals
+            this.enemies.push(new ZeldaEnemy(180, 180, 'fox'));
+            this.enemies.push(new ZeldaEnemy(320, 280, 'rabbit'));
+            this.enemies.push(new ZeldaEnemy(200, 350, 'bear'));
+        } else if (this.currentRoom === 'orchard') {
+            // Orchard room - bears protecting their territory
+            this.enemies.push(new ZeldaEnemy(150, 200, 'bear'));
+            this.enemies.push(new ZeldaEnemy(400, 200, 'wolf'));
+            this.enemies.push(new ZeldaEnemy(275, 320, 'fox'));
+        }
+        // Staff room - keep it peaceful for now
+        
+        console.log(`✅ Spawned ${this.enemies.length} animals in ${this.currentRoom} room`);
+    }
+    
     saveGame() {
         try {
             const saveData = {
                 playerX: this.player.x,
                 playerY: this.player.y,
+                playerHealth: this.player.currentHealth,
+                playerMaxHealth: this.player.maxHealth,
+                playerStamina: this.player.currentStamina,
+                playerMaxStamina: this.player.maxStamina,
                 currentRoom: this.currentRoom,
                 playerHasArmor: this.player.hasArmor,
                 playerHasStaff: this.player.hasMagicStaff,
-                inventoryItems: this.inventory.items,
-                inventoryWeaponIndex: this.inventory.currentWeaponIndex,
-                collectedItems: this.gameMap.items.filter(item => item.collected).map(item => ({
-                    x: item.x,
-                    y: item.y,
-                    type: item.type
-                })),
+                inventoryItems: this.inventory ? this.inventory.items : [],
+                inventoryWeaponIndex: this.inventory ? this.inventory.currentWeaponIndex : 0,
+                collectedItems: this.getAllCollectedItems(),
                 saveTime: new Date().toISOString()
             };
             
             localStorage.setItem('llamaKnightSave', JSON.stringify(saveData));
-            console.log('💾 Game saved successfully!');
+            console.log('💾 Game saved successfully!', saveData);
             
             // Show save confirmation
             this.showMessage('Game Saved!', 2000);
@@ -750,6 +1275,54 @@ class ZeldaGame {
         }
     }
     
+    validateSaveData(saveData) {
+        if (!saveData) return false;
+        
+        // Check required fields
+        const requiredFields = ['playerX', 'playerY', 'currentRoom'];
+        for (let field of requiredFields) {
+            if (saveData[field] === undefined) {
+                console.warn(`❌ Save data missing required field: ${field}`);
+                return false;
+            }
+        }
+        
+        // Check if the saved room exists
+        if (this.rooms && !this.rooms[saveData.currentRoom]) {
+            console.warn(`❌ Save data references unknown room: ${saveData.currentRoom}`);
+            return false;
+        }
+        
+        // Validate numeric values
+        if (isNaN(saveData.playerX) || isNaN(saveData.playerY)) {
+            console.warn('❌ Save data has invalid player coordinates');
+            return false;
+        }
+        
+        return true;
+    }
+    
+    getAllCollectedItems() {
+        const allCollectedItems = [];
+        
+        // Collect items from all rooms
+        Object.keys(this.rooms).forEach(roomName => {
+            const room = this.rooms[roomName];
+            if (room && room.items) {
+                room.items.filter(item => item.collected).forEach(item => {
+                    allCollectedItems.push({
+                        x: item.x,
+                        y: item.y,
+                        type: item.type,
+                        room: roomName
+                    });
+                });
+            }
+        });
+        
+        return allCollectedItems;
+    }
+    
     loadGame() {
         try {
             const saveData = JSON.parse(localStorage.getItem('llamaKnightSave'));
@@ -758,9 +1331,32 @@ class ZeldaGame {
                 return false;
             }
             
+            // Validate save data
+            if (!this.validateSaveData(saveData)) {
+                console.error('❌ Invalid save data detected');
+                this.showMessage('Save file corrupted!', 3000);
+                return false;
+            }
+            
+            console.log('📂 Loading valid save data:', saveData);
+            
             // Restore player position
             this.player.x = saveData.playerX;
             this.player.y = saveData.playerY;
+            
+            // Restore player health and stamina
+            if (saveData.playerHealth !== undefined) {
+                this.player.currentHealth = Math.max(1, saveData.playerHealth); // Ensure at least 1 HP
+            }
+            if (saveData.playerMaxHealth !== undefined) {
+                this.player.maxHealth = saveData.playerMaxHealth;
+            }
+            if (saveData.playerStamina !== undefined) {
+                this.player.currentStamina = saveData.playerStamina;
+            }
+            if (saveData.playerMaxStamina !== undefined) {
+                this.player.maxStamina = saveData.playerMaxStamina;
+            }
             
             // Restore room
             this.currentRoom = saveData.currentRoom;
@@ -769,32 +1365,46 @@ class ZeldaGame {
             // Restore player equipment
             if (saveData.playerHasArmor) {
                 this.player.equipArmor();
+            } else {
+                this.player.hasArmor = false;
             }
             if (saveData.playerHasStaff) {
                 this.player.equipMagicStaff();
+            } else {
+                this.player.hasMagicStaff = false;
             }
             
             // Restore inventory
-            if (saveData.inventoryItems) {
-                this.inventory.items = saveData.inventoryItems;
+            if (this.inventory && saveData.inventoryItems) {
+                this.inventory.items = [...saveData.inventoryItems]; // Create a copy
             }
-            if (saveData.inventoryWeaponIndex !== undefined) {
-                this.inventory.currentWeaponIndex = saveData.inventoryWeaponIndex;
+            if (this.inventory && saveData.inventoryWeaponIndex !== undefined) {
+                this.inventory.currentWeaponIndex = Math.max(0, saveData.inventoryWeaponIndex);
             }
             
-            // Restore collected items
-            if (saveData.collectedItems) {
+            // Restore collected items across all rooms
+            if (saveData.collectedItems && Array.isArray(saveData.collectedItems)) {
                 saveData.collectedItems.forEach(savedItem => {
-                    const item = this.gameMap.items.find(mapItem => 
-                        mapItem.x === savedItem.x && 
-                        mapItem.y === savedItem.y && 
-                        mapItem.type === savedItem.type
-                    );
-                    if (item) {
-                        item.collected = true;
+                    try {
+                        const room = savedItem.room ? this.rooms[savedItem.room] : this.gameMap;
+                        if (room && room.items) {
+                            const item = room.items.find(mapItem => 
+                                mapItem.x === savedItem.x && 
+                                mapItem.y === savedItem.y && 
+                                mapItem.type === savedItem.type
+                            );
+                            if (item) {
+                                item.collected = true;
+                            }
+                        }
+                    } catch (error) {
+                        console.warn('❌ Error restoring collected item:', savedItem, error);
                     }
                 });
             }
+            
+            // Respawn enemies for current room
+            this.spawnEnemies();
             
             console.log('📂 Game loaded successfully!');
             this.showMessage('Game Loaded!', 2000);
@@ -802,7 +1412,112 @@ class ZeldaGame {
             
         } catch (error) {
             console.error('❌ Error loading game:', error);
+            this.showMessage('Load Failed!', 2000);
             return false;
+        }
+    }
+    
+    restartFromSave() {
+        // Try to load from save first
+        const saveData = localStorage.getItem('llamaKnightSave');
+        
+        if (saveData) {
+            console.log('🔄 Restarting from last save...');
+            
+            try {
+                // Reset game state to playing
+                this.gameState = 'playing';
+                
+                // Make sure all rooms are initialized
+                if (!this.rooms || Object.keys(this.rooms).length === 0) {
+                    this.setupRooms();
+                }
+                
+                // Make sure player and inventory exist
+                if (!this.player) {
+                    this.setupPlayer();
+                }
+                if (!this.inventory) {
+                    this.setupInventory();
+                    this.player.inventory = this.inventory;
+                }
+                
+                // Load the saved game state
+                if (this.loadGame()) {
+                    // Reset player health to full (since they died)
+                    this.player.currentHealth = this.player.maxHealth;
+                    this.player.currentStamina = this.player.maxStamina;
+                    
+                    // Clear any status effects
+                    this.player.isInvulnerable = false;
+                    this.player.invulnerabilityTimer = 0;
+                    this.player.hurtTimer = 0;
+                    
+                    // Clear projectiles and reset combat state
+                    this.projectiles = [];
+                    
+                    console.log('✅ Successfully restarted from save!');
+                    this.showMessage('Restarted from Save!', 2000);
+                } else {
+                    throw new Error('Failed to load save data');
+                }
+                
+            } catch (error) {
+                console.log('❌ Failed to load save, starting new game...', error);
+                this.startNewGame();
+            }
+        } else {
+            // No save file, start new game
+            console.log('💫 No save found, starting new game...');
+            this.startNewGame();
+        }
+    }
+    
+    startNewGame() {
+        // Reset to initial game state
+        this.gameState = 'playing';
+        
+        try {
+            // Initialize a fresh game - start in main room
+            this.currentRoom = 'main';
+            
+            // Create rooms if they don't exist
+            if (!this.rooms || Object.keys(this.rooms).length === 0) {
+                console.log('📍 Creating rooms...');
+                this.rooms = {};
+                this.rooms['main'] = new ZeldaGameMap(this.spriteLoader, 'main');
+                this.rooms['staff_room'] = new ZeldaGameMap(this.spriteLoader, 'staff_room');
+                this.rooms['forest'] = new ZeldaGameMap(this.spriteLoader, 'forest');
+                this.rooms['grove'] = new ZeldaGameMap(this.spriteLoader, 'grove');
+                this.rooms['orchard'] = new ZeldaGameMap(this.spriteLoader, 'orchard');
+            }
+            
+            // Set current map
+            this.gameMap = this.rooms[this.currentRoom];
+            
+            // Create fresh player at spawn position
+            const spawnPos = this.gameMap.getSpawnPosition();
+            this.player = new ZeldaPlayer(spawnPos.x, spawnPos.y, this.spriteLoader);
+            
+            // Create fresh inventory and particle system
+            this.inventory = new ZeldaInventory(this.spriteLoader);
+            this.particleSystem = new ParticleSystem();
+            
+            // Connect systems
+            this.player.inventory = this.inventory;
+            this.player.particleSystem = this.particleSystem;
+            
+            // Clear projectiles and spawn enemies
+            this.projectiles = [];
+            this.spawnEnemies();
+            
+            console.log('🌟 New game started!');
+            this.showMessage('New Adventure Begins!', 3000);
+            
+        } catch (error) {
+            console.error('❌ Error starting new game:', error);
+            this.gameState = 'title';
+            this.showMessage('Failed to start game!', 3000);
         }
     }
     

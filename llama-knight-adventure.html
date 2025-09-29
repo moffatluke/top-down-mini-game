@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Llama Knight Adventure - Zelda Style</title>
+    <title>Llama Knight Adventure</title>
     <style>
         body {
             margin: 0;
@@ -62,7 +62,7 @@
             <div id="debug"></div>
         </div>
         <div id="controls">
-            WASD: Move • 1,2,3: Select Weapon • Mouse: Aim & Shoot (Staff) • I: Inventory • E: Cycle Armor • +/-: Zoom • F1: Debug
+            WASD: Move • SPACE: Dash • 1,2,3: Select Weapon • Mouse: Aim & Shoot (Staff) • I: Inventory • E: Cycle Armor • +/-: Zoom • F1: Debug
         </div>
     </div>
 
@@ -71,12 +71,14 @@
     <script src="js/zelda/GameMap.js"></script>
     <script src="js/zelda/Inventory.js"></script>
     <script src="js/zelda/Projectile.js"></script>
+    <script src="js/zelda/ParticleSystem.js"></script>
+    <script src="js/zelda/Enemy.js"></script>
     <script src="js/zelda/Player.js"></script>
     <script src="js/zelda/Game.js"></script>
     <script>
         // Global error handler
         window.onerror = function(msg, url, lineNo, columnNo, error) {
-            console.error('❌ JavaScript Error:', msg);
+            console.error(' JavaScript Error:', msg);
             console.error('File:', url, 'Line:', lineNo, 'Column:', columnNo);
             if (error) console.error('Stack:', error.stack);
             return false;

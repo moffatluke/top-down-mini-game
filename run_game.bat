@@ -19,10 +19,10 @@ if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" (
 
 if %CHROME_PATH%=="" (
     echo Chrome not found! Opening with default browser...
-    start zelda_game.html
+    start llama-knight-adventure.html
 ) else (
     echo Opening with Chrome (CORS disabled)...
-    %CHROME_PATH% --disable-web-security --disable-features=VizDisplayCompositor --user-data-dir="%TEMP%\chrome_dev" --allow-file-access-from-files zelda_game.html
+    %CHROME_PATH% --disable-web-security --disable-features=VizDisplayCompositor --user-data-dir="%TEMP%\chrome_dev" --allow-file-access-from-files llama-knight-adventure.html
 )
 
 echo.

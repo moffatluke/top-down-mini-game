@@ -12,6 +12,22 @@ class ZeldaPlayer {
         this.facingDirection = 'right'; // left or right - remembers which way we're facing horizontally
         this.isMoving = false;
         
+        // Stamina system
+        this.maxStamina = 100;
+        this.currentStamina = 100;
+        this.staminaRegenRate = 50; // stamina per second when regenerating (increased from 20)
+        this.staminaRegenDelay = 500; // milliseconds before stamina starts regenerating (reduced from 1000)
+        this.lastStaminaUse = 0; // timestamp of last stamina use
+        this.isStaminaExhausted = false; // True when stamina hits 0, false when fully regenerated
+        
+        // Health system
+        this.maxHealth = 100;
+        this.currentHealth = 100;
+        this.isInvulnerable = false;
+        this.invulnerabilityDuration = 1000; // 1 second of invulnerability after taking damage
+        this.invulnerabilityTimer = 0;
+        this.hurtTimer = 0;
+        
         // Animation properties
         this.animationFrame = 0;
         this.animationTimer = 0;
@@ -40,6 +56,20 @@ class ZeldaPlayer {
         this.hitboxWidth = 32;
         this.hitboxHeight = 24;
         
+        // Dash system
+        this.dashDistance = 64; // 2 blocks (32px each)
+        this.dashSpeed = 8; // Fast dash movement
+        this.dashDuration = 200; // milliseconds
+        this.dashCooldown = 1000; // milliseconds between dashes
+        this.isDashing = false;
+        this.dashStartTime = 0;
+        this.lastDashTime = 0;
+        this.dashStartX = 0;
+        this.dashStartY = 0;
+        this.dashTargetX = 0;
+        this.dashTargetY = 0;
+        this.dashStaminaCost = 20; // Stamina cost for dashing
+        
         // Input state
         this.keys = {};
         
@@ -49,16 +79,27 @@ class ZeldaPlayer {
         this.maxChargeTime = 2000; // 2 seconds
         this.chargeStartTime = 0;
         
-        this.setupInput();
+        // Don't setup input here - let Game class handle all input to avoid conflicts
+        // this.setupInput();
     }
 
     setupInput() {
         document.addEventListener('keydown', (e) => {
             this.keys[e.code] = true;
+            
+            // Prevent default behavior for space key (prevents page scrolling)
+            if (e.code === 'Space') {
+                e.preventDefault();
+            }
         });
 
         document.addEventListener('keyup', (e) => {
             this.keys[e.code] = false;
+            
+            // Prevent default behavior for space key
+            if (e.code === 'Space') {
+                e.preventDefault();
+            }
         });
     }
 
@@ -66,13 +107,16 @@ class ZeldaPlayer {
         this.handleInput();
         this.updateAnimation(deltaTime);
         this.updateCharging(deltaTime);
+        this.updateStamina(deltaTime);
+        this.updateHealth(deltaTime);
+        this.updateDash(deltaTime, gameMap);
         
         // Store old position for collision checking
         const oldX = this.x;
         const oldY = this.y;
         
-        // Apply movement
-        if (this.isMoving) {
+        // Apply movement (only if not dashing)
+        if (this.isMoving && !this.isDashing) {
             let newX = this.x;
             let newY = this.y;
             
@@ -137,6 +181,11 @@ class ZeldaPlayer {
             this.equipArmor();
         }
         // Magic staff is now found in the world, not equipped by key
+        
+        // Dash input (spacebar)
+        if (this.keys['Space'] && this.canDash()) {
+            this.startDash();
+        }
         
         // Update direction and movement state
         if (newDirection) {
@@ -373,12 +422,26 @@ class ZeldaPlayer {
         if (this.inventory) {
             const currentWeapon = this.inventory.getCurrentWeapon();
             if (currentWeapon.id === 'staff') {
+                // Check if stamina is exhausted (Zelda-style system)
+                if (this.isStaminaExhausted) {
+                    console.log('💨 Stamina exhausted! Must fully regenerate first.');
+                    return false;
+                }
+                
+                // Check if player has minimum stamina to start charging
+                if (this.currentStamina < 10) {
+                    console.log('💨 Not enough stamina to charge spell!');
+                    return false;
+                }
+                
                 this.isCharging = true;
                 this.chargeTime = 0;
                 this.chargeStartTime = Date.now();
                 console.log('🔮 Charging staff...');
+                return true;
             }
         }
+        return false;
     }
     
     stopCharging() {
@@ -387,13 +450,95 @@ class ZeldaPlayer {
             this.isCharging = false;
             const chargeResult = { charged: wasFullyCharged, chargeTime: this.chargeTime };
             
+            // Consume stamina based on spell power
+            let staminaCost = wasFullyCharged ? 40 : 15; // More stamina for charged spells
+            this.consumeStamina(staminaCost);
+            
             // Reset charge time for next use
             this.chargeTime = 0;
             
-            console.log(`🔥 Released ${wasFullyCharged ? 'CHARGED' : 'normal'} fireball! Charge time reset.`);
+            console.log(`🔥 Released ${wasFullyCharged ? 'CHARGED' : 'normal'} fireball! Stamina: ${this.currentStamina}/${this.maxStamina}`);
             return chargeResult;
         }
-        return null;
+        return { charged: false, chargeTime: 0 };
+    }
+    
+    // Stamina system methods
+    consumeStamina(amount) {
+        this.currentStamina = Math.max(0, this.currentStamina - amount);
+        this.lastStaminaUse = Date.now();
+        
+        // Set exhausted state if stamina hits zero (Zelda-style)
+        if (this.currentStamina <= 0) {
+            this.isStaminaExhausted = true;
+            console.log('💥 Stamina exhausted! Must fully regenerate before using again.');
+        }
+        
+        console.log(`💨 Consumed ${amount} stamina. Current: ${this.currentStamina}/${this.maxStamina} ${this.isStaminaExhausted ? '(EXHAUSTED)' : ''}`);
+    }
+    
+    canUseStamina(amount) {
+        // If exhausted, can't use stamina until fully regenerated
+        if (this.isStaminaExhausted) {
+            return false;
+        }
+        return this.currentStamina >= amount;
+    }
+    
+    updateStamina(deltaTime) {
+        // Only regenerate stamina if enough time has passed since last use
+        const timeSinceLastUse = Date.now() - this.lastStaminaUse;
+        if (timeSinceLastUse >= this.staminaRegenDelay && this.currentStamina < this.maxStamina) {
+            // Regenerate stamina over time
+            const staminaRegen = (this.staminaRegenRate * deltaTime) / 1000;
+            this.currentStamina = Math.min(this.maxStamina, this.currentStamina + staminaRegen);
+            
+            // Clear exhausted state only when stamina is FULLY regenerated (Zelda-style)
+            if (this.isStaminaExhausted && this.currentStamina >= this.maxStamina) {
+                this.isStaminaExhausted = false;
+                console.log('✨ Stamina fully restored! Actions available again.');
+            }
+        }
+    }
+
+    // Health system methods
+    updateHealth(deltaTime) {
+        // Update invulnerability timer
+        if (this.invulnerabilityTimer > 0) {
+            this.invulnerabilityTimer -= deltaTime;
+            if (this.invulnerabilityTimer <= 0) {
+                this.isInvulnerable = false;
+            }
+        }
+        
+        // Update hurt timer
+        if (this.hurtTimer > 0) {
+            this.hurtTimer -= deltaTime;
+        }
+    }
+
+    takeDamage(amount) {
+        if (this.isInvulnerable || this.currentHealth <= 0) {
+            return false; // No damage taken
+        }
+        
+        this.currentHealth = Math.max(0, this.currentHealth - amount);
+        this.isInvulnerable = true;
+        this.invulnerabilityTimer = this.invulnerabilityDuration;
+        this.hurtTimer = 200; // Brief hurt flash
+        
+        console.log(`💔 Player took ${amount} damage! Health: ${this.currentHealth}/${this.maxHealth}`);
+        
+        if (this.currentHealth <= 0) {
+            console.log('💀 Player died!');
+            // Trigger game over state
+            if (window.game) {
+                window.game.gameState = 'gameover';
+            }
+            return true; // Player died
+        }
+        
+        return false; // Player survived
     }
 
     // Get staff world position for fireball spawning (from the red tip)
@@ -430,6 +575,95 @@ class ZeldaPlayer {
                 return this.spriteLoader.get('llama_knight');
             } else {
                 return this.spriteLoader.get('llama_base');
+            }
+        }
+    }
+
+    // Dash system methods
+    canDash() {
+        const now = Date.now();
+        const cooldownPassed = (now - this.lastDashTime) >= this.dashCooldown;
+        const hasStamina = this.canUseStamina(this.dashStaminaCost);
+        return !this.isDashing && cooldownPassed && hasStamina;
+    }
+
+    startDash() {
+        if (!this.canDash()) return;
+        
+        // Consume stamina
+        this.consumeStamina(this.dashStaminaCost);
+        
+        // Set dash state
+        this.isDashing = true;
+        this.dashStartTime = Date.now();
+        this.lastDashTime = this.dashStartTime;
+        
+        // Calculate dash target position
+        this.dashStartX = this.x;
+        this.dashStartY = this.y;
+        
+        switch (this.direction) {
+            case 'up':
+                this.dashTargetY = this.y - this.dashDistance;
+                this.dashTargetX = this.x;
+                break;
+            case 'down':
+                this.dashTargetY = this.y + this.dashDistance;
+                this.dashTargetX = this.x;
+                break;
+            case 'left':
+                this.dashTargetX = this.x - this.dashDistance;
+                this.dashTargetY = this.y;
+                break;
+            case 'right':
+                this.dashTargetX = this.x + this.dashDistance;
+                this.dashTargetY = this.y;
+                break;
+        }
+        
+        // Create wind particles for visual effect
+        if (this.particleSystem) {
+            // Create particles from player's center
+            const centerX = this.x + this.renderWidth / 2;
+            const centerY = this.y + this.renderHeight / 2;
+            this.particleSystem.createWindBurst(centerX, centerY, this.direction, 15);
+        }
+        
+        console.log('🌪️ Dash started!');
+    }
+
+    updateDash(deltaTime, gameMap) {
+        if (!this.isDashing) return;
+        
+        const elapsed = Date.now() - this.dashStartTime;
+        const progress = Math.min(elapsed / this.dashDuration, 1.0);
+        
+        if (progress >= 1.0) {
+            // Dash complete
+            this.isDashing = false;
+            this.x = this.dashTargetX;
+            this.y = this.dashTargetY;
+            
+            // Check final position for collisions and adjust
+            if (gameMap.isCollision(this.x, this.y, this.hitboxWidth, this.hitboxHeight)) {
+                // Move back to last safe position
+                this.x = this.dashStartX;
+                this.y = this.dashStartY;
+                console.log('⚠️ Dash blocked by obstacle!');
+            }
+        } else {
+            // Interpolate position
+            const newX = this.dashStartX + (this.dashTargetX - this.dashStartX) * progress;
+            const newY = this.dashStartY + (this.dashTargetY - this.dashStartY) * progress;
+            
+            // Check for collisions during dash
+            if (gameMap.isCollision(newX, newY, this.hitboxWidth, this.hitboxHeight)) {
+                // Stop dash early if we hit something
+                this.isDashing = false;
+                console.log('⚠️ Dash interrupted by collision!');
+            } else {
+                this.x = newX;
+                this.y = newY;
             }
         }
     }
