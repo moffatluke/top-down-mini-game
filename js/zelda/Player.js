@@ -637,20 +637,23 @@ class ZeldaPlayer {
         
         ctx.save();
         
-        // Flip sword horizontally if player is facing left
+        // Flip sword to face away from the llama
         if (shouldFlip) {
-            ctx.scale(-1, 1);
+            // Player facing left: flip both horizontally and vertically so sword points away
+            ctx.scale(-1, -1);
             ctx.drawImage(
                 swordSprite,
                 0, 0, swordSprite.width, swordSprite.height,  // Full sprite
-                -(this.x + swordOffsetX + renderWidth/2), this.y + swordOffsetY - renderHeight/2 + this.bobOffset,
+                -(this.x + swordOffsetX + renderWidth/2), -(this.y + swordOffsetY + renderHeight/2 + this.bobOffset),
                 renderWidth, renderHeight
             );
         } else {
+            // Player facing right: flip vertically so sword points away
+            ctx.scale(1, -1);
             ctx.drawImage(
                 swordSprite,
                 0, 0, swordSprite.width, swordSprite.height,  // Full sprite
-                this.x + swordOffsetX - renderWidth/2, this.y + swordOffsetY - renderHeight/2 + this.bobOffset,
+                this.x + swordOffsetX - renderWidth/2, -(this.y + swordOffsetY + renderHeight/2 + this.bobOffset),
                 renderWidth, renderHeight
             );
         }

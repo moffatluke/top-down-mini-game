@@ -36,7 +36,7 @@ class SpriteLoader {
             
             // ITEMS AND EQUIPMENT
             'magic_staff': 'assets/sprites/staffRed.png',         // Magic staff item sprite
-            'weapons_sheet': 'assets/sprites/weapons.png',        // Weapons sprite sheet
+            'weapons_sheet': 'assets/sprites/steel-weapons.png',  // Weapons sprite sheet
             
             // TILESET INTEGRATION (main terrain source)
             'overworld_tileset': 'assets/sprites/overworld_tileset.png',  // Large sprite sheet with terrain tiles
@@ -263,7 +263,13 @@ class SpriteLoader {
     // Extract weapon sprites from the weapons sprite sheet
     getWeaponSprite(weaponX, weaponY, weaponSize = 32) {
         const weaponsSheet = this.get('weapons_sheet');
-        if (!weaponsSheet) return null;
+        if (!weaponsSheet) {
+            console.log('Weapons sheet not loaded');
+            return null;
+        }
+
+        console.log(`Extracting weapon at (${weaponX}, ${weaponY}) with size ${weaponSize}`);
+        console.log(`Weapons sheet dimensions: ${weaponsSheet.width}x${weaponsSheet.height}`);
 
         // Create a canvas to extract the specific weapon
         const canvas = document.createElement('canvas');
@@ -283,6 +289,23 @@ class SpriteLoader {
 
     // Get the specific sword at position 1,4
     getSword() {
-        return this.getWeaponSprite(1, 4, 32); // Assuming 32px weapons
+        const weaponsSheet = this.get('weapons_sheet');
+        if (!weaponsSheet) return null;
+        
+        // Detect weapon size based on sheet dimensions
+        // Common weapon sheet sizes are 16x16 or 32x32 per weapon
+        const sheetWidth = weaponsSheet.width;
+        const sheetHeight = weaponsSheet.height;
+        
+        // Try to detect grid size (assume square weapons)
+        let weaponSize = 32; // Default
+        if (sheetWidth <= 256 && sheetHeight <= 256) {
+            weaponSize = 16; // Smaller sprites
+        } else if (sheetWidth <= 512 && sheetHeight <= 512) {
+            weaponSize = 32; // Medium sprites
+        }
+        
+        console.log(`Using weapon size: ${weaponSize}px for sheet ${sheetWidth}x${sheetHeight}`);
+        return this.getWeaponSprite(1, 4, weaponSize);
     }
 }

@@ -28,7 +28,8 @@ class ZeldaGameMap {
             BUSH: 13,
             MUSHROOM: 14,
             CRYSTAL: 15,
-            LOG: 16
+            OLD_LOG: 16,  // Renamed old problematic logs
+            WOOD_LOG: 17  // New clean log system
         };
         
         this.tiles = [];
@@ -423,13 +424,42 @@ class ZeldaGameMap {
                 const tileX = Math.floor(x / this.tileSize);
                 const tileY = Math.floor(y / this.tileSize);
                 
-                // Create 2x2 tree groups - each tree occupies 2x2 tiles
-                const treeGroupX = Math.floor(tileX / 2) * 2;
-                const treeGroupY = Math.floor(tileY / 2) * 2;
+                // Find the actual 2x2 tree group this tile belongs to
+                // Check if this tile is the top-left of a 2x2 tree group
+                let isTopLeft = false;
+                let groupTopLeftX = tileX;
+                let groupTopLeftY = tileY;
+                
+                // Look for 2x2 tree patterns by checking if this is part of a complete 2x2 group
+                for (let testY = Math.max(0, tileY - 1); testY <= tileY; testY++) {
+                    for (let testX = Math.max(0, tileX - 1); testX <= tileX; testX++) {
+                        // Check if a 2x2 tree starting at (testX, testY) exists
+                        let has2x2Tree = true;
+                        for (let dy = 0; dy < 2 && has2x2Tree; dy++) {
+                            for (let dx = 0; dx < 2 && has2x2Tree; dx++) {
+                                const checkX = testX + dx;
+                                const checkY = testY + dy;
+                                if (!this.isValidTile(checkX, checkY) || 
+                                    !this.overlays[checkY] || 
+                                    this.overlays[checkY][checkX] !== this.TILE_TYPES.TREE) {
+                                    has2x2Tree = false;
+                                }
+                            }
+                        }
+                        
+                        if (has2x2Tree && testX <= tileX && testY <= tileY && 
+                            testX + 1 >= tileX && testY + 1 >= tileY) {
+                            groupTopLeftX = testX;
+                            groupTopLeftY = testY;
+                            break;
+                        }
+                    }
+                    if (groupTopLeftX !== tileX || groupTopLeftY !== tileY) break;
+                }
                 
                 // Determine position within the 2x2 tree
-                const relX = tileX - treeGroupX; // 0 or 1
-                const relY = tileY - treeGroupY; // 0 or 1
+                const relX = tileX - groupTopLeftX; // 0 or 1
+                const relY = tileY - groupTopLeftY; // 0 or 1
                 
                 // Map to tileset coordinates: (5,16)=TL, (6,16)=TR, (5,17)=BL, (6,17)=BR
                 const treeTileX = 5 + relX;
@@ -460,14 +490,14 @@ class ZeldaGameMap {
                 const logRelativeX = logTileX - logGroupStartX; // 0, 1, or 2
                 
                 // Map to tileset coordinates properly:
-                // Position 0 (left) = tileset (5,5), Position 1 (middle) = tileset (3,5), Position 2 (right) = tileset (4,5)
+                // Position 0 (left) = tileset (5,5), Position 1 (middle) = tileset (4,5), Position 2 (right) = tileset (3,5)
                 let logSpriteTileX;
                 if (logRelativeX === 0) {
-                    logSpriteTileX = 3; // Left end
+                    logSpriteTileX = 5; // Left end
                 } else if (logRelativeX === 1) {
-                    logSpriteTileX = 4; // Middle (swapped with right)
+                    logSpriteTileX = 4; // Middle
                 } else {
-                    logSpriteTileX = 5; // Right end (swapped with middle)
+                    logSpriteTileX = 3; // Right end
                 }
                 const logSpriteTileY = 5;
                 
@@ -475,6 +505,32 @@ class ZeldaGameMap {
                 sprite = this.spriteLoader.tilesetExtractor?.extractTile(logSpriteTileX, logSpriteTileY) || 
                          this.spriteLoader.get('tileset_log') || 
                          null; // No fallback sprite for logs
+                break;
+            case this.TILE_TYPES.WOOD_LOG:
+                color = '#8b4513'; // Brown color for wood logs
+                // Clean new log system: Left=(3,5), Middle=(4,5), Right=(5,5)
+                const woodLogTileX = Math.floor(x / this.tileSize);
+                const woodLogTileY = Math.floor(y / this.tileSize);
+                
+                // Determine position in 3-tile horizontal log
+                const woodLogGroupStartX = Math.floor(woodLogTileX / 3) * 3;
+                const woodLogRelativeX = woodLogTileX - woodLogGroupStartX; // 0, 1, or 2
+                
+                // Simple mapping: Left=(3,5), Middle=(4,5), Right=(5,5)
+                let woodLogSpriteTileX;
+                if (woodLogRelativeX === 0) {
+                    woodLogSpriteTileX = 3; // Left end
+                } else if (woodLogRelativeX === 1) {
+                    woodLogSpriteTileX = 4; // Middle
+                } else {
+                    woodLogSpriteTileX = 5; // Right end
+                }
+                const woodLogSpriteTileY = 5;
+                
+                // Get the specific wood log tile from tileset
+                sprite = this.spriteLoader.tilesetExtractor?.extractTile(woodLogSpriteTileX, woodLogSpriteTileY) || 
+                         this.spriteLoader.get('tileset_wood_log') || 
+                         null;
                 break;
             default:
                 color = '#ff00ff';
@@ -491,7 +547,8 @@ class ZeldaGameMap {
     renderItems(ctx) {
         for (const item of this.items) {
             if (!item.collected) {
-                const itemSize = this.tileSize * 0.8;
+                // Make sword bigger and more visible
+                const itemSize = item.type === 'sword' ? this.tileSize * 1.2 : this.tileSize * 0.8;
                 const itemX = item.x - itemSize / 2;
                 const itemY = item.y - itemSize / 2;
                 
@@ -672,7 +729,7 @@ class ZeldaGameMap {
             const x = startX + dx;
             const y = startY;
             if (this.isValidTile(x, y)) {
-                this.setOverlay(x, y, this.TILE_TYPES.LOG);
+                this.setOverlay(x, y, this.TILE_TYPES.WOOD_LOG);
             }
         }
     }
