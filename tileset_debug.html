@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tileset Coordinate Finder</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+            font-family: 'Courier New', monospace;
+        }
+        
+        #container {
+            display: flex;
+            gap: 20px;
+        }
+        
+        #tilesetDisplay {
+            border: 2px solid #333;
+            cursor: crosshair;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+        
+        #info {
+            min-width: 300px;
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        
+        #selectedTile {
+            width: 96px;
+            height: 96px;
+            border: 2px solid #555;
+            margin: 10px 0;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            background: #000;
+        }
+        
+        .button {
+            background: #4a4a4a;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        
+        .button:hover {
+            background: #5a5a5a;
+        }
+        
+        #coordinates {
+            font-size: 18px;
+            color: #4CAF50;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🗺️ Overworld Tileset Coordinate Finder</h1>
+    <p>Click on any tile to see its coordinates and preview it scaled up.</p>
+    
+    <div id="container">
+        <div>
+            <canvas id="tilesetDisplay"></canvas>
+        </div>
+        
+        <div id="info">
+            <h3>Selected Tile Info</h3>
+            <div id="coordinates">Click a tile to select</div>
+            <canvas id="selectedTile"></canvas>
+            
+            <h4>Controls:</h4>
+            <button class="button" onclick="toggleGrid()">Toggle Grid</button>
+            <button class="button" onclick="resetZoom()">Reset Zoom</button>
+            <button class="button" onclick="zoomIn()">Zoom In</button>
+            <button class="button" onclick="zoomOut()">Zoom Out</button>
+            
+            <h4>Tile Mapping Code:</h4>
+            <textarea id="codeOutput" style="width: 100%; height: 200px; background: #1a1a1a; color: #4CAF50; border: 1px solid #555; font-family: monospace;">
+// Click tiles to generate mapping code
+            </textarea>
+            
+            <button class="button" onclick="copyCode()">Copy Code</button>
+            <button class="button" onclick="clearMappings()">Clear Mappings</button>
+        </div>
+    </div>
+
+    <script src="js/zelda/TilesetExtractor.js"></script>
+    <script>
+        let tilesetExtractor = new TilesetExtractor();
+        let canvas = document.getElementById('tilesetDisplay');
+        let ctx = canvas.getContext('2d');
+        let selectedTileCanvas = document.getElementById('selectedTile');
+        let selectedTileCtx = selectedTileCanvas.getContext('2d');
+        let showGrid = true;
+        let zoom = 2;
+        let tileMappings = [];
+        
+        // Load the tileset image
+        async function loadTileset() {
+            try {
+                // Load your actual tileset image
+                await tilesetExtractor.loadTileset('assets/sprites/overworld_tileset.png');
+                drawTileset();
+                console.log('✅ Tileset loaded successfully!');
+            } catch (error) {
+                console.error('❌ Failed to load tileset:', error);
+                console.log('💡 Make sure overworld_tileset.png is in assets/sprites/ folder');
+                createPlaceholderTileset();
+                drawTileset();
+            }
+        }
+        
+        function createPlaceholderTileset() {
+            // Create a placeholder tileset for demonstration
+            const img = new Image();
+            img.width = 800;
+            img.height = 600;
+            
+            const placeholderCanvas = document.createElement('canvas');
+            placeholderCanvas.width = 800;
+            placeholderCanvas.height = 600;
+            const placeholderCtx = placeholderCanvas.getContext('2d');
+            
+            // Draw a grid of colored squares as placeholder
+            for (let y = 0; y < 600; y += 16) {
+                for (let x = 0; x < 800; x += 16) {
+                    const hue = ((x / 16) + (y / 16)) * 20 % 360;
+                    placeholderCtx.fillStyle = `hsl(${hue}, 70%, 50%)`;
+                    placeholderCtx.fillRect(x, y, 16, 16);
+                }
+            }
+            
+            tilesetExtractor.tilesetImage = placeholderCanvas;
+        }
+        
+        function drawTileset() {
+            if (!tilesetExtractor.tilesetImage) return;
+            
+            const img = tilesetExtractor.tilesetImage;
+            canvas.width = img.width * zoom;
+            canvas.height = img.height * zoom;
+            
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            if (showGrid) {
+                drawGrid();
+            }
+        }
+        
+        function drawGrid() {
+            const tileSize = tilesetExtractor.tileSize * zoom;
+            
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 1;
+            
+            // Vertical lines
+            for (let x = 0; x <= canvas.width; x += tileSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            
+            // Horizontal lines
+            for (let y = 0; y <= canvas.height; y += tileSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+        }
+        
+        // Handle tile selection
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const tileX = Math.floor(x / (tilesetExtractor.tileSize * zoom));
+            const tileY = Math.floor(y / (tilesetExtractor.tileSize * zoom));
+            
+            selectTile(tileX, tileY);
+        });
+        
+        function selectTile(tileX, tileY) {
+            document.getElementById('coordinates').textContent = `Tile: (${tileX}, ${tileY})`;
+            
+            // Extract and display the selected tile
+            const tile = tilesetExtractor.extractTile(tileX, tileY);
+            if (tile) {
+                selectedTileCtx.clearRect(0, 0, selectedTileCanvas.width, selectedTileCanvas.height);
+                selectedTileCtx.drawImage(tile, 0, 0, selectedTileCanvas.width, selectedTileCanvas.height);
+            }
+            
+            // Add to mappings
+            const tileName = prompt(`Enter a name for this tile (${tileX}, ${tileY}):`);
+            if (tileName) {
+                tileMappings.push({ name: tileName, x: tileX, y: tileY });
+                updateCodeOutput();
+            }
+        }
+        
+        function updateCodeOutput() {
+            let code = '// Tile mappings for your sprite sheet\\n{\\n';
+            tileMappings.forEach(mapping => {
+                code += `    '${mapping.name}': { x: ${mapping.x}, y: ${mapping.y} },\\n`;
+            });
+            code += '}';
+            
+            document.getElementById('codeOutput').value = code;
+        }
+        
+        function toggleGrid() {
+            showGrid = !showGrid;
+            drawTileset();
+        }
+        
+        function resetZoom() {
+            zoom = 2;
+            drawTileset();
+        }
+        
+        function zoomIn() {
+            zoom = Math.min(zoom * 1.5, 8);
+            drawTileset();
+        }
+        
+        function zoomOut() {
+            zoom = Math.max(zoom / 1.5, 0.5);
+            drawTileset();
+        }
+        
+        function copyCode() {
+            const textarea = document.getElementById('codeOutput');
+            textarea.select();
+            document.execCommand('copy');
+            alert('Code copied to clipboard!');
+        }
+        
+        function clearMappings() {
+            tileMappings = [];
+            updateCodeOutput();
+        }
+        
+        // Initialize
+        loadTileset();
+    </script>
+</body>
+</html>

@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual Map Editor - Llama Knight Adventure</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #2c3e50;
+            color: white;
+        }
+        
+        .editor-container {
+            display: flex;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .tileset-panel {
+            width: 300px;
+            background: #34495e;
+            padding: 15px;
+            border-radius: 8px;
+            height: fit-content;
+        }
+        
+        .tileset-canvas {
+            border: 2px solid #7f8c8d;
+            cursor: crosshair;
+            background: white;
+            display: block;
+            margin: 10px 0;
+        }
+        
+        .map-panel {
+            flex: 1;
+            background: #34495e;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        .map-canvas {
+            border: 2px solid #7f8c8d;
+            cursor: pointer;
+            background: #27ae60;
+            display: block;
+            margin: 10px 0;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #2980b9;
+        }
+        
+        button:disabled {
+            background: #7f8c8d;
+            cursor: not-allowed;
+        }
+        
+        .selected-tile {
+            border: 2px solid #e74c3c;
+            background: #34495e;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        
+        .coordinate-display {
+            background: #2c3e50;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            margin: 5px 0;
+        }
+        
+        .export-section {
+            margin-top: 20px;
+            background: #2c3e50;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        
+        textarea {
+            width: 100%;
+            height: 200px;
+            background: #34495e;
+            color: white;
+            border: 1px solid #7f8c8d;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .info {
+            background: #27ae60;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        
+        .warning {
+            background: #e67e22;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🗺️ Visual Map Editor</h1>
+    <p>Drag and drop tiles from the tileset to design your map!</p>
+    
+    <div class="editor-container">
+        <!-- Tileset Panel -->
+        <div class="tileset-panel">
+            <h3>📋 Tileset</h3>
+            <div class="info">Click on a tile to select it</div>
+            <canvas id="tilesetCanvas" class="tileset-canvas" width="288" height="400"></canvas>
+            
+            <div class="selected-tile">
+                <h4>Selected Tile</h4>
+                <canvas id="selectedTileCanvas" width="48" height="48"></canvas>
+                <div class="coordinate-display">
+                    Coords: <span id="selectedCoords">None</span>
+                </div>
+            </div>
+            
+            <div class="controls">
+                <button onclick="loadTileset()">Load Tileset</button>
+                <button onclick="clearSelection()">Clear Selection</button>
+            </div>
+        </div>
+        
+        <!-- Map Panel -->
+        <div class="map-panel">
+            <h3>🎮 Map Canvas (42x32 tiles)</h3>
+            <div class="warning">Left click to place tile, right click to erase</div>
+            <canvas id="mapCanvas" class="map-canvas" width="1008" height="768"></canvas>
+            
+            <div class="controls">
+                <button onclick="clearMap()">Clear Map</button>
+                <button onclick="fillWithGrass()">Fill with Grass</button>
+                <button onclick="generateCode()">Generate Code</button>
+                <button onclick="exportAsImage()">Export as Image</button>
+            </div>
+            
+            <div class="coordinate-display">
+                Mouse: <span id="mouseCoords">-</span> | 
+                Tile: <span id="tileCoords">-</span>
+            </div>
+            
+            <div class="export-section">
+                <h4>📤 Generated JavaScript Code</h4>
+                <p>Copy this code into your GameMap.js file:</p>
+                <textarea id="generatedCode" placeholder="Click 'Generate Code' to create JavaScript code for your map..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Canvas references
+        const tilesetCanvas = document.getElementById('tilesetCanvas');
+        const tilesetCtx = tilesetCanvas.getContext('2d');
+        const selectedTileCanvas = document.getElementById('selectedTileCanvas');
+        const selectedTileCtx = selectedTileCanvas.getContext('2d');
+        const mapCanvas = document.getElementById('mapCanvas');
+        const mapCtx = mapCanvas.getContext('2d');
+        
+        // Disable image smoothing for pixel art
+        tilesetCtx.imageSmoothingEnabled = false;
+        selectedTileCtx.imageSmoothingEnabled = false;
+        mapCtx.imageSmoothingEnabled = false;
+        
+        // Game constants
+        const TILE_SIZE = 24; // Game tile size
+        const TILESET_TILE_SIZE = 16; // Original tileset tile size
+        const MAP_WIDTH = 42; // Tiles
+        const MAP_HEIGHT = 32; // Tiles
+        
+        // Editor state
+        let tilesetImage = null;
+        let selectedTileX = -1;
+        let selectedTileY = -1;
+        let mapData = []; // 2D array storing tile coordinates
+        
+        // Initialize map data
+        function initializeMap() {
+            mapData = [];
+            for (let y = 0; y < MAP_HEIGHT; y++) {
+                mapData[y] = [];
+                for (let x = 0; x < MAP_WIDTH; x++) {
+                    mapData[y][x] = { tileX: 17, tileY: 29 }; // Default to grass
+                }
+            }
+        }
+        
+        // Load the tileset image
+        async function loadTileset() {
+            try {
+                const img = new Image();
+                img.onload = () => {
+                    tilesetImage = img;
+                    drawTileset();
+                    console.log('✅ Tileset loaded:', img.width, 'x', img.height);
+                };
+                img.onerror = () => {
+                    alert('❌ Failed to load tileset. Make sure the file exists!');
+                };
+                img.src = 'assets/sprites/overworld_tileset.png';
+            } catch (error) {
+                console.error('Error loading tileset:', error);
+            }
+        }
+        
+        // Draw the tileset for selection
+        function drawTileset() {
+            if (!tilesetImage) return;
+            
+            tilesetCtx.clearRect(0, 0, tilesetCanvas.width, tilesetCanvas.height);
+            
+            // Calculate how many tiles fit in the canvas
+            const tilesPerRow = Math.floor(tilesetCanvas.width / 18); // 18px per tile (16 + 2 border)
+            const tilesPerCol = Math.floor(tilesetCanvas.height / 18);
+            
+            for (let row = 0; row < tilesPerCol; row++) {
+                for (let col = 0; col < tilesPerRow; col++) {
+                    const sourceX = col * TILESET_TILE_SIZE;
+                    const sourceY = row * TILESET_TILE_SIZE;
+                    const destX = col * 18;
+                    const destY = row * 18;
+                    
+                    // Check if source coordinates are within tileset bounds
+                    if (sourceX + TILESET_TILE_SIZE <= tilesetImage.width && 
+                        sourceY + TILESET_TILE_SIZE <= tilesetImage.height) {
+                        // Draw tile
+                        tilesetCtx.drawImage(
+                            tilesetImage,
+                            sourceX, sourceY, TILESET_TILE_SIZE, TILESET_TILE_SIZE,
+                            destX + 1, destY + 1, 16, 16
+                        );
+                        
+                        // Draw border
+                        tilesetCtx.strokeStyle = '#7f8c8d';
+                        tilesetCtx.lineWidth = 1;
+                        tilesetCtx.strokeRect(destX, destY, 18, 18);
+                        
+                        // Highlight selected tile
+                        if (selectedTileX === col && selectedTileY === row) {
+                            tilesetCtx.strokeStyle = '#e74c3c';
+                            tilesetCtx.lineWidth = 3;
+                            tilesetCtx.strokeRect(destX, destY, 18, 18);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Draw the selected tile preview
+        function drawSelectedTile() {
+            selectedTileCtx.clearRect(0, 0, selectedTileCanvas.width, selectedTileCanvas.height);
+            
+            if (tilesetImage && selectedTileX >= 0 && selectedTileY >= 0) {
+                const sourceX = selectedTileX * TILESET_TILE_SIZE;
+                const sourceY = selectedTileY * TILESET_TILE_SIZE;
+                
+                selectedTileCtx.drawImage(
+                    tilesetImage,
+                    sourceX, sourceY, TILESET_TILE_SIZE, TILESET_TILE_SIZE,
+                    0, 0, 48, 48
+                );
+                
+                document.getElementById('selectedCoords').textContent = 
+                    `(${selectedTileX}, ${selectedTileY})`;
+            } else {
+                document.getElementById('selectedCoords').textContent = 'None';
+            }
+        }
+        
+        // Draw the map
+        function drawMap() {
+            mapCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+            
+            if (!tilesetImage) return;
+            
+            for (let y = 0; y < MAP_HEIGHT; y++) {
+                for (let x = 0; x < MAP_WIDTH; x++) {
+                    const tile = mapData[y][x];
+                    if (tile) {
+                        const sourceX = tile.tileX * TILESET_TILE_SIZE;
+                        const sourceY = tile.tileY * TILESET_TILE_SIZE;
+                        const destX = x * TILE_SIZE;
+                        const destY = y * TILE_SIZE;
+                        
+                        mapCtx.drawImage(
+                            tilesetImage,
+                            sourceX, sourceY, TILESET_TILE_SIZE, TILESET_TILE_SIZE,
+                            destX, destY, TILE_SIZE, TILE_SIZE
+                        );
+                    }
+                }
+            }
+            
+            // Draw grid
+            mapCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            mapCtx.lineWidth = 1;
+            for (let x = 0; x <= MAP_WIDTH; x++) {
+                mapCtx.beginPath();
+                mapCtx.moveTo(x * TILE_SIZE, 0);
+                mapCtx.lineTo(x * TILE_SIZE, mapCanvas.height);
+                mapCtx.stroke();
+            }
+            for (let y = 0; y <= MAP_HEIGHT; y++) {
+                mapCtx.beginPath();
+                mapCtx.moveTo(0, y * TILE_SIZE);
+                mapCtx.lineTo(mapCanvas.width, y * TILE_SIZE);
+                mapCtx.stroke();
+            }
+        }
+        
+        // Event handlers
+        tilesetCanvas.addEventListener('click', (e) => {
+            const rect = tilesetCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            selectedTileX = Math.floor(x / 18);
+            selectedTileY = Math.floor(y / 18);
+            
+            drawTileset();
+            drawSelectedTile();
+        });
+        
+        mapCanvas.addEventListener('click', (e) => {
+            if (selectedTileX < 0 || selectedTileY < 0) {
+                alert('Please select a tile from the tileset first!');
+                return;
+            }
+            
+            const rect = mapCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const tileX = Math.floor(x / TILE_SIZE);
+            const tileY = Math.floor(y / TILE_SIZE);
+            
+            if (tileX >= 0 && tileX < MAP_WIDTH && tileY >= 0 && tileY < MAP_HEIGHT) {
+                mapData[tileY][tileX] = { tileX: selectedTileX, tileY: selectedTileY };
+                drawMap();
+            }
+        });
+        
+        mapCanvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            
+            const rect = mapCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const tileX = Math.floor(x / TILE_SIZE);
+            const tileY = Math.floor(y / TILE_SIZE);
+            
+            if (tileX >= 0 && tileX < MAP_WIDTH && tileY >= 0 && tileY < MAP_HEIGHT) {
+                mapData[tileY][tileX] = { tileX: 17, tileY: 29 }; // Reset to grass
+                drawMap();
+            }
+        });
+        
+        mapCanvas.addEventListener('mousemove', (e) => {
+            const rect = mapCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const tileX = Math.floor(x / TILE_SIZE);
+            const tileY = Math.floor(y / TILE_SIZE);
+            
+            document.getElementById('mouseCoords').textContent = `${Math.floor(x)}, ${Math.floor(y)}`;
+            document.getElementById('tileCoords').textContent = `${tileX}, ${tileY}`;
+        });
+        
+        // Utility functions
+        function clearSelection() {
+            selectedTileX = -1;
+            selectedTileY = -1;
+            drawTileset();
+            drawSelectedTile();
+        }
+        
+        function clearMap() {
+            initializeMap();
+            drawMap();
+        }
+        
+        function fillWithGrass() {
+            for (let y = 0; y < MAP_HEIGHT; y++) {
+                for (let x = 0; x < MAP_WIDTH; x++) {
+                    mapData[y][x] = { tileX: 17, tileY: 29 }; // Grass coordinates
+                }
+            }
+            drawMap();
+        }
+        
+        function generateCode() {
+            let code = `// Generated map data from Visual Map Editor\n`;
+            code += `// Place this in your room generation method\n\n`;
+            
+            code += `for (let y = 0; y < this.height; y++) {\n`;
+            code += `    this.tiles[y] = [];\n`;
+            code += `    for (let x = 0; x < this.width; x++) {\n`;
+            code += `        // Get the appropriate tile from tileset coordinates\n`;
+            code += `        const tileCoords = getTileCoordinates(x, y);\n`;
+            code += `        this.tiles[y][x] = this.TILE_TYPES.GRASS; // Default\n`;
+            code += `        \n`;
+            code += `        // Set specific tiles from your design\n`;
+            
+            // Group tiles by coordinates for efficiency
+            const tileGroups = {};
+            for (let y = 0; y < MAP_HEIGHT; y++) {
+                for (let x = 0; x < MAP_WIDTH; x++) {
+                    const tile = mapData[y][x];
+                    const key = `${tile.tileX},${tile.tileY}`;
+                    if (!tileGroups[key]) {
+                        tileGroups[key] = [];
+                    }
+                    tileGroups[key].push({ x, y });
+                }
+            }
+            
+            Object.entries(tileGroups).forEach(([coords, positions]) => {
+                const [tileX, tileY] = coords.split(',').map(Number);
+                if (tileX !== 17 || tileY !== 29) { // Skip default grass
+                    code += `        // Tile (${tileX}, ${tileY})\n`;
+                    positions.forEach(pos => {
+                        code += `        if (x === ${pos.x} && y === ${pos.y}) {\n`;
+                        code += `            // Use tileset extractor to get tile (${tileX}, ${tileY})\n`;
+                        code += `            this.overlays[y][x] = this.spriteLoader.tilesetExtractor.extractTile(${tileX}, ${tileY});\n`;
+                        code += `        }\n`;
+                    });
+                    code += `        \n`;
+                }
+            });
+            
+            code += `    }\n`;
+            code += `}\n`;
+            
+            document.getElementById('generatedCode').value = code;
+        }
+        
+        function exportAsImage() {
+            const link = document.createElement('a');
+            link.download = 'map-design.png';
+            link.href = mapCanvas.toDataURL();
+            link.click();
+        }
+        
+        // Initialize
+        initializeMap();
+        loadTileset();
+    </script>
+</body>
+</html>

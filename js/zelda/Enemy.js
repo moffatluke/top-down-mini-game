@@ -1,53 +1,82 @@
-// Basic Enemy Class for Zelda-style Game
+/**
+ * Basic Enemy Class for Zelda-style Game
+ * 
+ * This class handles all enemy functionality including:
+ * - AI behavior (wandering, chasing, attacking)
+ * - Movement and pathfinding
+ * - Combat mechanics (damage, knockback, invulnerability)
+ * - Animation and visual effects
+ * - Different animal types with unique stats
+ * - State management and transitions
+ */
 class ZeldaEnemy {
     constructor(x, y, type = 'rabbit') {
-        this.x = x;
-        this.y = y;
-        this.type = type;
+        // =====================================================
+        // POSITION AND IDENTITY
+        // =====================================================
+        this.x = x;                         // Enemy's X position in pixels
+        this.y = y;                         // Enemy's Y position in pixels
+        this.type = type;                   // Animal type: 'rabbit', 'wolf', 'bear'
         
-        // Set animal-specific properties
+        // Set stats based on animal type (speed, health, damage, etc.)
         this.setAnimalProperties();
         
-        // Movement and physics
-        this.direction = Math.random() * Math.PI * 2; // Random starting direction
+        // =====================================================
+        // MOVEMENT AND PHYSICS
+        // =====================================================
+        this.direction = Math.random() * Math.PI * 2;  // Random starting direction in radians
         
-        // Visual properties
-        this.width = 24;
-        this.height = 24;
+        // =====================================================
+        // VISUAL PROPERTIES
+        // =====================================================
+        this.width = 24;                    // Enemy sprite width in pixels
+        this.height = 24;                   // Enemy sprite height in pixels
         
-        // AI behavior
-        this.aiState = 'wander'; // 'wander', 'chase', 'attack', 'hurt', 'dead'
-        this.wanderTimer = 0;
-        this.wanderInterval = 2000; // Change direction every 2 seconds
-        this.wanderDirection = Math.random() * Math.PI * 2;
+        // =====================================================
+        // AI BEHAVIOR SYSTEM
+        // =====================================================
+        this.aiState = 'wander';            // Current AI state: 'wander', 'chase', 'attack', 'hurt', 'dead'
+        this.wanderTimer = 0;               // Timer for wandering behavior
+        this.wanderInterval = 2000;         // How often to change direction while wandering (milliseconds)
+        this.wanderDirection = Math.random() * Math.PI * 2;  // Current wander direction
         
-        // Animation and effects
-        this.animationFrame = 0;
-        this.animationTimer = 0;
-        this.animationSpeed = 300; // milliseconds per frame
-        this.hurtTimer = 0;
-        this.knockbackVelocityX = 0;
-        this.knockbackVelocityY = 0;
+        // =====================================================
+        // ANIMATION AND VISUAL EFFECTS
+        // =====================================================
+        this.animationFrame = 0;            // Current frame in walking animation
+        this.animationTimer = 0;            // Timer to control animation speed
+        this.animationSpeed = 300;          // Milliseconds per animation frame
+        this.hurtTimer = 0;                 // Timer for hurt/damage visual effects
+        this.knockbackVelocityX = 0;        // Horizontal knockback velocity when hit
+        this.knockbackVelocityY = 0;        // Vertical knockback velocity when hit
         
-        // Combat states
-        this.isInvulnerable = false;
-        this.invulnerabilityDuration = 500; // milliseconds
-        this.invulnerabilityTimer = 0;
+        // =====================================================
+        // COMBAT AND DAMAGE SYSTEM
+        // =====================================================
+        this.isInvulnerable = false;        // Temporary invulnerability after taking damage
+        this.invulnerabilityDuration = 500; // How long invulnerability lasts (milliseconds)
+        this.invulnerabilityTimer = 0;      // Countdown timer for invulnerability
     }
     
+    /**
+     * Sets animal-specific properties based on enemy type
+     * Each animal type has different stats for varied gameplay
+     */
     setAnimalProperties() {
         switch (this.type) {
             case 'rabbit':
-                this.speed = 0.8; // Reduced speed for better control
-                this.maxHealth = 20;
-                this.attackDamage = 5;
-                this.attackRange = 28;
-                this.detectionRange = 60;
-                this.attackCooldown = 1500;
-                this.wanderInterval = 1500; // Change direction more often (nervous)
+                // Small, fast, nervous prey animal
+                this.speed = 0.8;           // Movement speed (reduced for better control)
+                this.maxHealth = 20;        // Low health - easy to kill
+                this.attackDamage = 5;      // Low damage - mostly harmless
+                this.attackRange = 28;      // Short attack range
+                this.detectionRange = 60;   // Medium detection range
+                this.attackCooldown = 1500; // How often rabbit can attack (milliseconds)
+                this.wanderInterval = 1500; // Changes direction often (nervous behavior)
                 break;
             case 'wolf':
-                this.speed = 1.2; // Reduced but still fast
+                // Medium predator - aggressive and fast
+                this.speed = 1.2;           // Fast movement (reduced but still quick)
                 this.maxHealth = 40;
                 this.attackDamage = 15;
                 this.attackRange = 35;
@@ -56,9 +85,10 @@ class ZeldaEnemy {
                 this.wanderInterval = 3000; // More focused movement
                 break;
             case 'bear':
-                this.speed = 0.6; // Slow and steady
-                this.maxHealth = 60;
-                this.attackDamage = 20;
+                // Large, slow, powerful tank enemy
+                this.speed = 0.6;           // Slow but powerful
+                this.maxHealth = 60;        // High health - tank enemy
+                this.attackDamage = 20;     // High damage - very dangerous
                 this.attackRange = 40;
                 this.detectionRange = 80;
                 this.attackCooldown = 1200;

@@ -1,66 +1,114 @@
-// Zelda-style Player Character
+/**
+ * Zelda-style Player Character Class
+ * 
+ * This class handles all player functionality including:
+ * - Movement and collision detection
+ * - Health and stamina systems
+ * - Visual effects (damage flashing, animations)
+ * - Combat mechanics (dash attacks, magic staff)
+ * - Input handling (keyboard controls)
+ * - Sprite rendering and animation
+ */
 class ZeldaPlayer {
     constructor(x, y, spriteLoader) {
-        this.x = x;
-        this.y = y;
-        this.spriteLoader = spriteLoader;
-        this.inventory = null; // Will be set by game
+        // =====================================================
+        // POSITION AND CORE REFERENCES
+        // =====================================================
+        this.x = x;                         // Player's X position in pixels
+        this.y = y;                         // Player's Y position in pixels
+        this.spriteLoader = spriteLoader;   // Reference to sprite loading system
+        this.inventory = null;              // Will be set by game - holds items like magic staff
         
-        // Movement properties
-        this.speed = 2; // Slower, more controlled movement
-        this.direction = 'down'; // down, up, left, right
-        this.facingDirection = 'right'; // left or right - remembers which way we're facing horizontally
-        this.isMoving = false;
+        // =====================================================
+        // MOVEMENT SYSTEM
+        // =====================================================
+        // Movement properties - scaled for 24px tiles (2x smaller than original 48px)
+        this.speed = 1;                     // Pixels per frame movement speed (reduced 2x for smaller tiles)
+        this.direction = 'down';            // Current facing direction: 'down', 'up', 'left', 'right'
+        this.facingDirection = 'right';     // Horizontal facing memory: 'left' or 'right' (for sprite consistency)
+        this.isMoving = false;              // Boolean: true when player is actively moving
+        this.moveX = 0;                     // Movement vector X component (-1 to 1 for smooth diagonal movement)
+        this.moveY = 0;                     // Movement vector Y component (-1 to 1 for smooth diagonal movement)
         
-        // Stamina system
-        this.maxStamina = 100;
-        this.currentStamina = 100;
-        this.staminaRegenRate = 50; // stamina per second when regenerating (increased from 20)
-        this.staminaRegenDelay = 500; // milliseconds before stamina starts regenerating (reduced from 1000)
-        this.lastStaminaUse = 0; // timestamp of last stamina use
-        this.isStaminaExhausted = false; // True when stamina hits 0, false when fully regenerated
+        // =====================================================
+        // STAMINA SYSTEM (for dash attacks and special abilities)
+        // =====================================================
+        this.maxStamina = 100;              // Maximum stamina points
+        this.currentStamina = 100;          // Current stamina (decreases with dash/abilities)
+        this.staminaRegenRate = 50;         // Stamina points recovered per second (increased from 20)
+        this.staminaRegenDelay = 500;       // Milliseconds to wait before stamina starts regenerating (reduced from 1000)
+        this.lastStaminaUse = 0;            // Timestamp of when stamina was last used (for regen delay)
+        this.isStaminaExhausted = false;    // True when stamina hits 0, false when fully regenerated
         
-        // Health system
-        this.maxHealth = 100;
-        this.currentHealth = 100;
-        this.isInvulnerable = false;
-        this.invulnerabilityDuration = 1000; // 1 second of invulnerability after taking damage
-        this.invulnerabilityTimer = 0;
-        this.hurtTimer = 0;
+        // =====================================================
+        // HEALTH AND DAMAGE SYSTEM
+        // =====================================================
+        this.maxHealth = 100;               // Maximum health points
+        this.currentHealth = 100;           // Current health (decreases when taking damage)
+        this.isInvulnerable = false;        // Temporary invulnerability after taking damage
+        this.invulnerabilityDuration = 1000;// How long invulnerability lasts (1 second in milliseconds)
+        this.invulnerabilityTimer = 0;      // Countdown timer for invulnerability
+        this.hurtTimer = 0;                 // Timer for hurt animation effects
         
-        // Animation properties
-        this.animationFrame = 0;
-        this.animationTimer = 0;
-        this.animationSpeed = 150; // milliseconds per frame
+        // =====================================================
+        // VISUAL DAMAGE EFFECTS (red flashing when hurt/low health)
+        // =====================================================
+        this.lowHealthFlashTimer = 0;       // Timer for low health warning flash
+        this.lowHealthFlashDuration = 500;  // How often to flash when health is low (every 500ms)
+        this.damageFlashTimer = 0;          // Timer for brief flash when taking damage
+        this.damageFlashDuration = 200;     // How long damage flash lasts (200ms)
+        this.lowHealthThreshold = 30;       // Health level below which player flashes red
         
-        // Bouncing animation
-        this.bobOffset = 0;
-        this.bobSpeed = 0.01;
+        // =====================================================
+        // ANIMATION SYSTEM
+        // =====================================================
+        this.animationFrame = 0;            // Current frame in walking animation (0 or 1)
+        this.animationTimer = 0;            // Timer to control animation speed
+        this.animationSpeed = 150;          // Milliseconds per animation frame (controls walk speed)
         
-        // Sprite properties (2x3 grid: 2 columns, 3 rows)
-        this.spriteWidth = 48;   // Each frame is 48px wide (96px ÷ 2 columns)
-        this.spriteHeight = 48;  // Each frame is 48px tall (144px ÷ 3 rows)
-        this.renderWidth = 48;   // Display size matches sprite frame
-        this.renderHeight = 48;  // Display size matches sprite frame
+        // Bouncing animation (subtle up/down movement when moving)
+        this.bobOffset = 0;                 // Vertical offset for bouncing effect
+        this.bobSpeed = 0.01;               // Speed of bouncing animation
         
-        // Sprite sheet layout (2x3 grid)
-        this.spriteCols = 2;
-        this.spriteRows = 3;
+        // =====================================================
+        // SPRITE RENDERING PROPERTIES
+        // =====================================================
+        // Sprite sheet layout: 2x3 grid (2 columns, 3 rows)
+        // Row 0: Walking down (2 frames)
+        // Row 1: Walking up (2 frames) 
+        // Row 2: Walking side (2 frames, flipped for left/right)
+        this.spriteWidth = 48;              // Each frame is 48px wide (96px total ÷ 2 columns)
+        this.spriteHeight = 48;             // Each frame is 48px tall (144px total ÷ 3 rows)
+        this.renderWidth = 48;              // Display size matches sprite frame
+        this.renderHeight = 48;             // Display size matches sprite frame
         
-        // Equipment and items
-        this.hasArmor = false;      // Can upgrade to knight armor
-        this.hasMagicStaff = false; // Can pick up magic staff
-        this.inventory = [];        // Future inventory system
+        // Sprite sheet grid layout (2 columns x 3 rows = 6 total frames)
+        this.spriteCols = 2;                // Number of columns in sprite sheet
+        this.spriteRows = 3;                // Number of rows in sprite sheet
         
-        // Collision box (smaller than sprite for better gameplay)
-        this.hitboxWidth = 32;
-        this.hitboxHeight = 24;
+        // =====================================================
+        // EQUIPMENT AND INVENTORY SYSTEM
+        // =====================================================
+        this.hasArmor = false;              // Boolean: true when player has knight armor equipped
+        this.hasMagicStaff = false;         // Boolean: true when player has magic staff (found in world)
+        this.hasSword = false;              // Boolean: true when player has sword equipped
+        this.inventory = [];                // Array: future inventory system for items
         
-        // Dash system
-        this.dashDistance = 64; // 2 blocks (32px each)
-        this.dashSpeed = 8; // Fast dash movement
-        this.dashDuration = 200; // milliseconds
-        this.dashCooldown = 1000; // milliseconds between dashes
+        // =====================================================
+        // COLLISION DETECTION (hitbox smaller than sprite for better gameplay)
+        // =====================================================
+        // Hitbox scaled for 24px tiles (2x smaller than original 48px tiles)
+        this.hitboxWidth = 18;              // Slightly wider collision - was 16, now 18 for better tree collision
+        this.hitboxHeight = 16;             // Taller collision - was 12, now 16 to prevent walking over tree tops
+        
+        // =====================================================
+        // DASH ATTACK SYSTEM (special movement ability)
+        // =====================================================
+        // Dash system scaled for 24px tiles
+        this.dashDistance = 48;             // Distance of dash: 2 tiles (24px each) - scaled down 2x from original 96px
+        this.dashSpeed = 8;                 // Speed of dash movement (unused in current implementation)
+        this.dashDuration = 150; // milliseconds - slightly faster for snappier feel
+        this.dashCooldown = 800; // milliseconds between dashes - reduced for more responsive gameplay
         this.isDashing = false;
         this.dashStartTime = 0;
         this.lastDashTime = 0;
@@ -68,140 +116,215 @@ class ZeldaPlayer {
         this.dashStartY = 0;
         this.dashTargetX = 0;
         this.dashTargetY = 0;
-        this.dashStaminaCost = 20; // Stamina cost for dashing
+        this.dashStaminaCost = 15; // Stamina cost for dashing - reduced slightly
         
-        // Input state
-        this.keys = {};
+        // =====================================================
+        // DASH VISUAL EFFECTS (trail that follows player during dash)
+        // =====================================================
+        this.dashTrails = [];               // Array to store trail positions for visual effect
+        this.maxTrailLength = 8;            // Maximum number of trail segments to display
+        this.trailUpdateInterval = 10;      // Update trail every 10ms during dash
+        this.lastTrailUpdate = 0;           // Timer for trail updates
         
-        // Charging system
-        this.isCharging = false;
-        this.chargeTime = 0;
-        this.maxChargeTime = 2000; // 2 seconds
-        this.chargeStartTime = 0;
+        // =====================================================
+        // INPUT SYSTEM (keyboard state tracking)
+        // =====================================================
+        this.keys = {};                     // Object to track which keys are currently pressed
         
-        // Don't setup input here - let Game class handle all input to avoid conflicts
+        // =====================================================
+        // CHARGING SYSTEM (for future charged attacks)
+        // =====================================================
+        this.isCharging = false;            // Boolean: true when player is charging an attack
+        this.chargeTime = 0;                // How long current charge has been held (milliseconds)
+        this.maxChargeTime = 2000;          // Maximum charge time: 2 seconds
+        this.chargeStartTime = 0;           // Timestamp when charging started
+        
+        // Note: Input setup is handled by Game class to avoid conflicts
         // this.setupInput();
     }
 
+    /**
+     * Sets up keyboard event listeners for player input
+     * This method handles both keydown and keyup events to track key states
+     */
     setupInput() {
+        // Listen for key press events
         document.addEventListener('keydown', (e) => {
-            this.keys[e.code] = true;
+            this.keys[e.code] = true;       // Mark key as pressed in our state object
             
-            // Prevent default behavior for space key (prevents page scrolling)
+            // Prevent default browser behavior for space key (stops page scrolling)
             if (e.code === 'Space') {
                 e.preventDefault();
             }
         });
 
+        // Listen for key release events
         document.addEventListener('keyup', (e) => {
-            this.keys[e.code] = false;
+            this.keys[e.code] = false;      // Mark key as released in our state object
             
-            // Prevent default behavior for space key
+            // Prevent default browser behavior for space key
             if (e.code === 'Space') {
                 e.preventDefault();
             }
         });
     }
 
+    /**
+     * Main update method called every frame
+     * This coordinates all player systems and applies movement
+     * 
+     * @param {number} deltaTime - Time elapsed since last frame (milliseconds)
+     * @param {ZeldaGameMap} gameMap - Reference to game map for collision detection
+     */
     update(deltaTime, gameMap) {
-        this.handleInput();
-        this.updateAnimation(deltaTime);
-        this.updateCharging(deltaTime);
-        this.updateStamina(deltaTime);
-        this.updateHealth(deltaTime);
-        this.updateDash(deltaTime, gameMap);
+        // Update all player systems in order
+        this.handleInput();                 // Process keyboard input and set movement vectors
+        this.updateAnimation(deltaTime);    // Update walking animation and sprite frames
+        this.updateCharging(deltaTime);     // Update charging system for special attacks
+        this.updateStamina(deltaTime);      // Handle stamina regeneration over time
+        this.updateHealth(deltaTime);       // Update health timers and damage effects
+        this.updateDash(deltaTime, gameMap);// Handle dash movement and collision
         
-        // Store old position for collision checking
+        // =====================================================
+        // MOVEMENT AND COLLISION DETECTION
+        // =====================================================
+        // Store old position for collision checking (in case we need to revert)
         const oldX = this.x;
         const oldY = this.y;
         
-        // Apply movement (only if not dashing)
+        // Apply movement (only if not dashing - dash has its own movement system)
         if (this.isMoving && !this.isDashing) {
-            let newX = this.x;
-            let newY = this.y;
+            // Calculate new position using movement vector for smooth diagonal movement
+            const newX = this.x + (this.moveX * this.speed);
+            const newY = this.y + (this.moveY * this.speed);
             
-            switch (this.direction) {
-                case 'up':
-                    newY -= this.speed;
-                    break;
-                case 'down':
-                    newY += this.speed;
-                    break;
-                case 'left':
-                    newX -= this.speed;
-                    break;
-                case 'right':
-                    newX += this.speed;
-                    break;
-            }
-            
-            // Check collision with map boundaries and obstacles
+            // Check if new position would cause collision with map boundaries or obstacles
             if (this.canMoveTo(newX, newY, gameMap)) {
+                // No collision - move to new position
                 this.x = newX;
                 this.y = newY;
             } else {
-                // Stop moving if we hit something
-                this.isMoving = false;
+                // Collision detected - try moving in just one direction
+                // This allows player to "slide" along walls when moving diagonally
+                const onlyX = this.x + (this.moveX * this.speed);  // Try X movement only
+                const onlyY = this.y + (this.moveY * this.speed);  // Try Y movement only
+                
+                if (this.canMoveTo(onlyX, this.y, gameMap)) {
+                    // Can move horizontally - slide along vertical wall
+                    this.x = onlyX;
+                } else if (this.canMoveTo(this.x, onlyY, gameMap)) {
+                    // Can move vertically - slide along horizontal wall
+                    this.y = onlyY;
+                    // Can move vertically - slide along horizontal wall
+                    this.y = onlyY;
+                } else {
+                    // Can't move in any direction - stop moving
+                    this.isMoving = false;
+                }
             }
         }
     }
     
+    /**
+     * Updates the charging system for special attacks
+     * @param {number} deltaTime - Time elapsed since last frame
+     */
     updateCharging(deltaTime) {
         if (this.isCharging) {
             this.chargeTime += deltaTime;
             
-            // Cap at max charge time
+            // Cap charge time at maximum to prevent overcharging
             if (this.chargeTime >= this.maxChargeTime) {
                 this.chargeTime = this.maxChargeTime;
             }
         }
     }
 
+    /**
+     * Handles keyboard input and calculates movement vectors
+     * This method processes WASD/Arrow keys for 8-directional movement
+     * and handles special inputs like dash and equipment
+     */
     handleInput() {
-        let newDirection = null;
-        let moving = false;
+        // =====================================================
+        // MOVEMENT INPUT PROCESSING
+        // =====================================================
+        // Calculate movement vector based on currently pressed keys
+        let moveX = 0;                      // Horizontal movement component (-1, 0, or 1)
+        let moveY = 0;                      // Vertical movement component (-1, 0, or 1)
+        let moving = false;                 // Track if any movement keys are pressed
         
-        // Check directional input (WASD + Arrow keys)
+        // Check horizontal movement keys (A/Left Arrow = left, D/Right Arrow = right)
+        if (this.keys['KeyA'] || this.keys['ArrowLeft']) {
+            moveX -= 1;                     // Move left (negative X direction)
+            moving = true;
+        }
+        if (this.keys['KeyD'] || this.keys['ArrowRight']) {
+            moveX += 1;                     // Move right (positive X direction)
+            moving = true;
+        }
+        
+        // Check vertical movement keys (W/Up Arrow = up, S/Down Arrow = down)
         if (this.keys['KeyW'] || this.keys['ArrowUp']) {
-            newDirection = 'up';
+            moveY -= 1;                     // Move up (negative Y direction)
             moving = true;
-        } else if (this.keys['KeyS'] || this.keys['ArrowDown']) {
-            newDirection = 'down';
-            moving = true;
-        } else if (this.keys['KeyA'] || this.keys['ArrowLeft']) {
-            newDirection = 'left';
-            moving = true;
-        } else if (this.keys['KeyD'] || this.keys['ArrowRight']) {
-            newDirection = 'right';
+        }
+        if (this.keys['KeyS'] || this.keys['ArrowDown']) {
+            moveY += 1;                     // Move down (positive Y direction)
             moving = true;
         }
         
-        // Equipment test controls
-        if (this.keys['Digit1'] && !this.hasArmor) {
-            this.equipArmor();
+        // Normalize diagonal movement to prevent faster diagonal speed
+        if (moveX !== 0 && moveY !== 0) {
+            const length = Math.sqrt(moveX * moveX + moveY * moveY);
+            moveX /= length;
+            moveY /= length;
         }
-        // Magic staff is now found in the world, not equipped by key
+        
+        // Store movement vector and determine primary direction for sprite facing
+        this.moveX = moveX;
+        this.moveY = moveY;
+        
+        // Update facing direction based on movement (prioritize the stronger component)
+        if (Math.abs(moveX) > Math.abs(moveY)) {
+            this.direction = moveX > 0 ? 'right' : 'left';
+        } else if (moveY !== 0) {
+            this.direction = moveY > 0 ? 'down' : 'up';
+        }
+        
+        // Equipment test controls removed - armor must be found in the world
+        // Magic staff is found in the world, not equipped by key
         
         // Dash input (spacebar)
         if (this.keys['Space'] && this.canDash()) {
+            console.log('🌪️ Attempting to start dash...');
             this.startDash();
-        }
-        
-        // Update direction and movement state
-        if (newDirection) {
-            this.direction = newDirection;
-            this.isMoving = moving;
+        } else if (this.keys['Space']) {
+            // Debug why dash can't start
+            const now = Date.now();
+            const cooldownPassed = (now - this.lastDashTime) >= this.dashCooldown;
+            const hasStamina = this.canUseStamina(this.dashStaminaCost);
             
-            // Remember horizontal facing direction
-            if (newDirection === 'left' || newDirection === 'right') {
-                this.facingDirection = newDirection;
+            if (this.isDashing) {
+                console.log('❌ Can\'t dash: already dashing');
+            } else if (!cooldownPassed) {
+                const remainingCooldown = this.dashCooldown - (now - this.lastDashTime);
+                console.log(`❌ Can't dash: cooldown (${remainingCooldown}ms remaining)`);
+            } else if (!hasStamina) {
+                console.log(`❌ Can't dash: insufficient stamina (${this.currentStamina}/${this.dashStaminaCost}) exhausted:${this.isStaminaExhausted}`);
             }
-        } else {
-            this.isMoving = false;
         }
         
-        // Reset animation if we stopped moving or changed direction
-        if (!this.isMoving || (newDirection && newDirection !== this.direction)) {
+        // Update movement state
+        this.isMoving = moving;
+        
+        // Remember horizontal facing direction for sprite consistency
+        if (this.direction === 'left' || this.direction === 'right') {
+            this.facingDirection = this.direction;
+        }
+        
+        // Reset animation if we stopped moving or changed direction significantly
+        if (!this.isMoving) {
             this.animationFrame = 0;
             this.animationTimer = 0;
         }
@@ -236,10 +359,14 @@ class ZeldaPlayer {
             return false;
         }
         
-        // Check collision with solid tiles
+        // Adjust collision box to be more bottom-heavy for better tree collision
+        // The visual character's feet should align with collision detection
+        const collisionOffsetY = 6; // Move collision box down to represent feet position
+        
+        // Check collision with solid tiles using adjusted position
         return gameMap.canMoveTo(
             x - this.hitboxWidth / 2, 
-            y - this.hitboxHeight / 2,
+            y - this.hitboxHeight / 2 + collisionOffsetY,  // Offset collision down
             this.hitboxWidth, 
             this.hitboxHeight
         );
@@ -320,10 +447,15 @@ class ZeldaPlayer {
             const currentWeapon = this.inventory.getCurrentWeapon();
             if (currentWeapon.id === 'staff') {
                 this.renderMagicStaff(ctx, shouldFlip);
+            } else if (currentWeapon.id === 'sword') {
+                this.renderSword(ctx, shouldFlip);
             }
         } else if (this.hasMagicStaff) {
             // Fallback to old system
             this.renderMagicStaff(ctx, shouldFlip);
+        } else if (this.hasSword) {
+            // Fallback to old system
+            this.renderSword(ctx, shouldFlip);
         }
         
         // Debug: Draw hitbox (optional)
@@ -336,6 +468,71 @@ class ZeldaPlayer {
                 this.hitboxWidth, 
                 this.hitboxHeight
             );
+            
+            // Debug: Show dash info
+            if (this.isDashing) {
+                // Draw dash path
+                ctx.strokeStyle = '#ffff00';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(this.dashStartX, this.dashStartY);
+                ctx.lineTo(this.dashTargetX, this.dashTargetY);
+                ctx.stroke();
+                
+                // Draw dash target
+                ctx.fillStyle = '#ffff00';
+                ctx.fillRect(this.dashTargetX - 5, this.dashTargetY - 5, 10, 10);
+                
+                // Show dash progress
+                const elapsed = Date.now() - this.dashStartTime;
+                const progress = Math.min(elapsed / this.dashDuration, 1.0);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '12px Arial';
+                ctx.fillText(`Dash: ${Math.floor(progress * 100)}%`, this.x + 20, this.y - 20);
+            }
+            
+            // Show dash cooldown
+            const now = Date.now();
+            const cooldownRemaining = Math.max(0, this.dashCooldown - (now - this.lastDashTime));
+            if (cooldownRemaining > 0) {
+                ctx.fillStyle = '#ff8888';
+                ctx.font = '10px Arial';
+                ctx.fillText(`Cooldown: ${cooldownRemaining}ms`, this.x + 20, this.y + 30);
+            }
+        }
+        
+        // Red damage overlay effects
+        let shouldShowRedOverlay = false;
+        let redIntensity = 0;
+        
+        // Check for damage flash (brief red flash when taking damage)
+        if (this.damageFlashTimer > 0) {
+            shouldShowRedOverlay = true;
+            redIntensity = 0.6; // Strong red flash for damage
+            console.log('🔴 Damage flash active, intensity:', redIntensity);
+        }
+        // Check for low health flash (persistent red flash when health < 30)
+        else if (this.currentHealth <= this.lowHealthThreshold && this.currentHealth > 0) {
+            const flashPhase = (this.lowHealthFlashTimer / this.lowHealthFlashDuration) * Math.PI * 2;
+            const flashAlpha = (Math.sin(flashPhase) + 1) / 2; // Oscillates between 0 and 1
+            if (flashAlpha > 0.3) { // Only show red when flash is bright enough
+                shouldShowRedOverlay = true;
+                redIntensity = 0.4 * flashAlpha; // Pulsing red for low health
+                console.log('💔 Low health flash active, intensity:', redIntensity);
+            }
+        }
+        
+        // Apply red overlay if needed
+        if (shouldShowRedOverlay) {
+            ctx.save();
+            ctx.fillStyle = `rgba(255, 0, 0, ${redIntensity * 0.5})`;
+            ctx.fillRect(
+                this.x - this.width / 2, 
+                this.y - this.height / 2, 
+                this.width, 
+                this.height
+            );
+            ctx.restore();
         }
     }
 
@@ -348,6 +545,11 @@ class ZeldaPlayer {
     equipMagicStaff() {
         this.hasMagicStaff = true;
         console.log('🪄 Llama acquired magic staff!');
+    }
+
+    equipSword() {
+        this.hasSword = true;
+        console.log('⚔️ Llama equipped with sword!');
     }
 
     renderMagicStaff(ctx, shouldFlip) {
@@ -412,6 +614,44 @@ class ZeldaPlayer {
                 frameX, frameY, staffFrameWidth, staffFrameHeight,  // Source frame
                 this.x + staffOffsetX - renderWidth/2, this.y + staffOffsetY - renderHeight/2 + this.bobOffset,
                 renderWidth, renderHeight  // Reasonable destination size
+            );
+        }
+        
+        ctx.restore();
+    }
+
+    renderSword(ctx, shouldFlip) {
+        const swordSprite = this.spriteLoader.getSword();
+        if (!swordSprite) {
+            console.error('❌ Sword sprite not found!');
+            return;
+        }
+        
+        // Calculate sword position relative to player
+        let swordOffsetX = shouldFlip ? -18 : 18;  // Position to side of player
+        let swordOffsetY = 2; // Slightly below center
+        
+        // Make equipped sword smaller and proportional
+        let renderWidth = 24;   // Smaller sword size
+        let renderHeight = 24;
+        
+        ctx.save();
+        
+        // Flip sword horizontally if player is facing left
+        if (shouldFlip) {
+            ctx.scale(-1, 1);
+            ctx.drawImage(
+                swordSprite,
+                0, 0, swordSprite.width, swordSprite.height,  // Full sprite
+                -(this.x + swordOffsetX + renderWidth/2), this.y + swordOffsetY - renderHeight/2 + this.bobOffset,
+                renderWidth, renderHeight
+            );
+        } else {
+            ctx.drawImage(
+                swordSprite,
+                0, 0, swordSprite.width, swordSprite.height,  // Full sprite
+                this.x + swordOffsetX - renderWidth/2, this.y + swordOffsetY - renderHeight/2 + this.bobOffset,
+                renderWidth, renderHeight
             );
         }
         
@@ -515,6 +755,21 @@ class ZeldaPlayer {
         if (this.hurtTimer > 0) {
             this.hurtTimer -= deltaTime;
         }
+        
+        // Update damage flash timer
+        if (this.damageFlashTimer > 0) {
+            this.damageFlashTimer -= deltaTime;
+        }
+        
+        // Update low health flash timer
+        if (this.currentHealth <= this.lowHealthThreshold) {
+            this.lowHealthFlashTimer += deltaTime;
+            if (this.lowHealthFlashTimer >= this.lowHealthFlashDuration) {
+                this.lowHealthFlashTimer = 0;
+            }
+        } else {
+            this.lowHealthFlashTimer = 0;
+        }
     }
 
     takeDamage(amount) {
@@ -526,9 +781,11 @@ class ZeldaPlayer {
         this.isInvulnerable = true;
         this.invulnerabilityTimer = this.invulnerabilityDuration;
         this.hurtTimer = 200; // Brief hurt flash
+        this.damageFlashTimer = this.damageFlashDuration; // Trigger damage flash
         
         console.log(`💔 Player took ${amount} damage! Health: ${this.currentHealth}/${this.maxHealth}`);
-        
+        console.log(`🔴 Damage flash timer set to: ${this.damageFlashTimer}ms`);
+        //death logic:
         if (this.currentHealth <= 0) {
             console.log('💀 Player died!');
             // Trigger game over state
@@ -578,6 +835,20 @@ class ZeldaPlayer {
             }
         }
     }
+    
+    addTrailPosition(x, y) {
+        // Add current position to trail
+        this.dashTrails.push({
+            x: x,
+            y: y,
+            timestamp: Date.now()
+        });
+        
+        // Remove old trail positions
+        if (this.dashTrails.length > this.maxTrailLength) {
+            this.dashTrails.shift();
+        }
+    }
 
     // Dash system methods
     canDash() {
@@ -588,7 +859,12 @@ class ZeldaPlayer {
     }
 
     startDash() {
-        if (!this.canDash()) return;
+        if (!this.canDash()) {
+            console.log('❌ Dash rejected by canDash()');
+            return;
+        }
+        
+        console.log(`🌪️ Starting dash in direction: ${this.direction}`);
         
         // Consume stamina
         this.consumeStamina(this.dashStaminaCost);
@@ -619,7 +895,15 @@ class ZeldaPlayer {
                 this.dashTargetX = this.x + this.dashDistance;
                 this.dashTargetY = this.y;
                 break;
+            default:
+                // If no direction set, dash forward (down)
+                this.direction = 'down';
+                this.dashTargetY = this.y + this.dashDistance;
+                this.dashTargetX = this.x;
+                break;
         }
+        
+        console.log(`🎯 Dash from (${this.dashStartX}, ${this.dashStartY}) to (${this.dashTargetX}, ${this.dashTargetY})`);
         
         // Create wind particles for visual effect
         if (this.particleSystem) {
@@ -629,41 +913,63 @@ class ZeldaPlayer {
             this.particleSystem.createWindBurst(centerX, centerY, this.direction, 15);
         }
         
-        console.log('🌪️ Dash started!');
+        console.log('✅ Dash started successfully!');
     }
 
     updateDash(deltaTime, gameMap) {
-        if (!this.isDashing) return;
+        if (!this.isDashing) {
+            // Clear dash trails when not dashing
+            this.dashTrails = [];
+            return;
+        }
         
-        const elapsed = Date.now() - this.dashStartTime;
+        const now = Date.now();
+        const elapsed = now - this.dashStartTime;
         const progress = Math.min(elapsed / this.dashDuration, 1.0);
+        
+        // Update dash trail
+        if (now - this.lastTrailUpdate >= this.trailUpdateInterval) {
+            this.addTrailPosition(this.x, this.y);
+            this.lastTrailUpdate = now;
+        }
         
         if (progress >= 1.0) {
             // Dash complete
+            console.log('🏁 Dash completed');
             this.isDashing = false;
-            this.x = this.dashTargetX;
-            this.y = this.dashTargetY;
             
-            // Check final position for collisions and adjust
-            if (gameMap.isCollision(this.x, this.y, this.hitboxWidth, this.hitboxHeight)) {
+            // Check final position for collisions
+            if (gameMap && gameMap.isCollision && gameMap.isCollision(this.dashTargetX, this.dashTargetY, this.hitboxWidth, this.hitboxHeight)) {
                 // Move back to last safe position
+                console.log('⚠️ Final dash position blocked, reverting to start');
                 this.x = this.dashStartX;
                 this.y = this.dashStartY;
-                console.log('⚠️ Dash blocked by obstacle!');
+            } else {
+                // Move to target position
+                this.x = this.dashTargetX;
+                this.y = this.dashTargetY;
+                console.log(`✅ Dash completed at (${this.x}, ${this.y})`);
             }
         } else {
-            // Interpolate position
+            // Interpolate position during dash
             const newX = this.dashStartX + (this.dashTargetX - this.dashStartX) * progress;
             const newY = this.dashStartY + (this.dashTargetY - this.dashStartY) * progress;
             
             // Check for collisions during dash
-            if (gameMap.isCollision(newX, newY, this.hitboxWidth, this.hitboxHeight)) {
+            if (gameMap && gameMap.isCollision && gameMap.isCollision(newX, newY, this.hitboxWidth, this.hitboxHeight)) {
                 // Stop dash early if we hit something
+                console.log('⚠️ Dash interrupted by collision at progress:', progress);
                 this.isDashing = false;
-                console.log('⚠️ Dash interrupted by collision!');
+                // Stay at current position (don't move into the wall)
             } else {
+                // Update position
                 this.x = newX;
                 this.y = newY;
+                
+                // Debug dash progress every 25%
+                if (Math.floor(progress * 4) !== Math.floor((progress - 0.01) * 4)) {
+                    console.log(`⚡ Dashing... ${Math.floor(progress * 100)}% (${this.x.toFixed(1)}, ${this.y.toFixed(1)})`);
+                }
             }
         }
     }

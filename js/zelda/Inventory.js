@@ -20,8 +20,8 @@ class ZeldaInventory {
         this.currentArmorIndex = 0;  // Start with no armor
         
         // Collected items (what's available in inventory)
-        this.collectedWeapons = new Set(['none', 'sword']); // Start with sword available
-        this.collectedArmor = new Set(['none', 'knight']);   // Start with knight armor available
+        this.collectedWeapons = new Set(['none']); // Start with no weapons - must find them!
+        this.collectedArmor = new Set(['none']);   // Start with no armor - must find it!
         
         // UI properties
         this.isVisible = false;

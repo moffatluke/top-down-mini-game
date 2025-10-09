@@ -1,52 +1,84 @@
-// Main Zelda-style Game Controller
+/**
+ * Main Zelda-style Game Controller
+ * 
+ * This is the central game class that coordinates all game systems:
+ * - Game loop and timing
+ * - Input handling
+ * - Camera and rendering
+ * - Game state management (title, playing, paused, etc.)
+ * - Room transitions
+ * - Object lifecycle management (player, enemies, projectiles)
+ * - Debug systems and performance monitoring
+ */
 class ZeldaGame {
     constructor() {
-        this.canvas = document.getElementById('gameCanvas');
-        this.ctx = this.canvas.getContext('2d');
-        this.debugElement = document.getElementById('debug');
+        // =====================================================
+        // CANVAS AND RENDERING
+        // =====================================================
+        this.canvas = document.getElementById('gameCanvas');    // Main game canvas element
+        this.ctx = this.canvas.getContext('2d');               // 2D rendering context
+        this.debugElement = document.getElementById('debug');   // Debug info display element
         
-        // Game state
-        this.gameState = 'title'; // 'title', 'playing', 'paused', 'gameover'
-        this.isRunning = false;
-        this.lastTime = 0;
-        this.fps = 0;
-        this.frameCount = 0;
-        this.fpsTimer = 0;
+        // =====================================================
+        // GAME STATE MANAGEMENT
+        // =====================================================
+        this.gameState = 'title';           // Current state: 'title', 'playing', 'paused', 'gameover'
+        this.isRunning = false;             // Whether game loop is active
+        this.lastTime = 0;                  // Timestamp of last frame (for delta time calculation)
+        this.fps = 0;                       // Current frames per second
+        this.frameCount = 0;                // Total frames rendered (for FPS calculation)
+        this.fpsTimer = 0;                  // Timer for FPS updates
         
-        // Input tracking
-        this.keys = {};
+        // =====================================================
+        // INPUT SYSTEM
+        // =====================================================
+        this.keys = {};                     // Object tracking which keys are currently pressed
         
-        // Camera and zoom
-        this.zoom = 1.5;  // Zoom level for better detail visibility
+        // =====================================================
+        // CAMERA AND DISPLAY
+        // =====================================================
+        this.zoom = 1.5;                    // Camera zoom level for better detail visibility
         
-        // Game objects
-        this.spriteLoader = null;
-        this.gameMap = null;
-        this.player = null;
-        this.inventory = null;
-        this.projectiles = [];
-        this.particleSystem = null;
-        this.enemies = [];
+        // =====================================================
+        // CORE GAME OBJECTS
+        // =====================================================
+        this.spriteLoader = null;           // Handles loading and managing all game sprites
+        this.gameMap = null;                // Current room's tile map
+        this.player = null;                 // Player character object
+        this.inventory = null;              // Player's inventory system
+        this.projectiles = [];              // Array of active projectiles (magic staff shots, etc.)
+        this.particleSystem = null;         // Visual effects system
+        this.enemies = [];                  // Array of enemies in current room
         
-        // Mouse input
-        this.mouseX = 0;
-        this.mouseY = 0;
-        this.worldMouseX = 0;
-        this.worldMouseY = 0;
+        // =====================================================
+        // MOUSE INPUT TRACKING
+        // =====================================================
+        this.mouseX = 0;                    // Mouse X position on canvas
+        this.mouseY = 0;                    // Mouse Y position on canvas
+        this.worldMouseX = 0;               // Mouse X position in world coordinates (accounting for camera)
+        this.worldMouseY = 0;               // Mouse Y position in world coordinates (accounting for camera)
         
-        // Room system
-        this.currentRoom = 'main';
-        this.rooms = {};
+        // =====================================================
+        // ROOM SYSTEM
+        // =====================================================
+        this.currentRoom = 'main';          // Name of currently active room
+        this.rooms = {};                    // Cache of generated rooms for performance
         
-        // Title screen background
-        this.titleBackground = null;
+        // =====================================================
+        // UI AND VISUAL SYSTEMS
+        // =====================================================
+        this.titleBackground = null;        // Background image for title screen
         
-        // Debug mode
-        window.DEBUG_MODE = false;
+        // =====================================================
+        // DEBUG AND DEVELOPMENT
+        // =====================================================
+        window.DEBUG_MODE = false;          // Global debug mode toggle
         
-        // Message system
-        this.messageText = '';
-        this.messageTimer = 0;
+        // =====================================================
+        // MESSAGE SYSTEM (for player notifications)
+        // =====================================================
+        this.messageText = '';              // Current message to display
+        this.messageTimer = 0;              // How long to show current message
         
         // Background images
         this.titleBackground = null;
@@ -192,9 +224,14 @@ class ZeldaGame {
         
         // Only charge if staff is equipped
         const currentWeapon = this.inventory.getCurrentWeapon();
-        if (currentWeapon.id !== 'staff') return;
+        console.log('🔍 Mouse down - Current weapon:', currentWeapon.id, currentWeapon.name);
+        if (currentWeapon.id !== 'staff') {
+            console.log('❌ Cannot charge - staff not equipped!');
+            return;
+        }
         
         // Start charging the staff
+        console.log('⚡ Starting staff charge...');
         this.player.startCharging();
     }
     
@@ -203,11 +240,20 @@ class ZeldaGame {
         
         // Only shoot if staff is equipped
         const currentWeapon = this.inventory.getCurrentWeapon();
-        if (currentWeapon.id !== 'staff') return;
+        console.log('🔍 Mouse up - Current weapon:', currentWeapon.id, currentWeapon.name);
+        if (currentWeapon.id !== 'staff') {
+            console.log('❌ Cannot shoot - staff not equipped!');
+            return;
+        }
         
         // Stop charging and get charge info
         const chargeInfo = this.player.stopCharging();
-        if (!chargeInfo) return;
+        if (!chargeInfo) {
+            console.log('❌ No charge info - cannot shoot!');
+            return;
+        }
+        
+        console.log('🔥 Shooting fireball with charge info:', chargeInfo);
         
         // Calculate staff position based on player's facing direction
         const staffOffset = this.player.getStaffWorldPosition();
@@ -224,6 +270,7 @@ class ZeldaGame {
         
         this.projectiles.push(fireball);
         console.log(`🔥 ${projectileType} shot from staff at (${staffOffset.x}, ${staffOffset.y}) towards: (${this.worldMouseX}, ${this.worldMouseY})`);
+        console.log(`⚡ Projectile damage: ${fireball.damage}, size: ${fireball.size}, speed: ${fireball.speed}`);
         console.log(`📍 Mouse screen: (${this.mouseX}, ${this.mouseY}), Camera: (${this.calculateCameraPosition().x}, ${this.calculateCameraPosition().y}), Zoom: ${this.zoom}`);
     }
 
@@ -340,16 +387,18 @@ class ZeldaGame {
                     console.log('Weapon:', this.inventory.getCurrentWeapon().name);
                 }
                 
+                // Debug: F2 key for tileset coordinate testing
+                if (e.code === 'F2') {
+                    e.preventDefault();
+                    this.testTilesetCoordinates();
+                }
+                
                 if (e.code === 'KeyQ') {  // Q key - cycle weapon (backup)
                     e.preventDefault();
                     this.inventory.cycleWeapon();
                     console.log('Weapon:', this.inventory.getCurrentWeapon().name);
                 }
-                if (e.code === 'KeyE') {  // E key - cycle armor
-                    e.preventDefault();
-                    this.inventory.cycleArmor();
-                    console.log('Armor:', this.inventory.getCurrentArmor().name);
-                }
+                // E key armor cycling removed - armor must be found in the world
             }
         });
         
@@ -601,8 +650,14 @@ class ZeldaGame {
                                        projectile.size, 
                                        projectile.size)) {
                     
+                    console.log(`🎯 Projectile hit enemy! Damage: ${projectile.damage}`);
+                    
                     // Deal damage to enemy
                     const enemyDied = enemy.takeDamage(projectile.damage, projectile.x, projectile.y);
+                    
+                    if (enemyDied) {
+                        console.log('💀 Enemy defeated by projectile!');
+                    }
                     
                     // Remove projectile
                     projectile.active = false;
@@ -1210,6 +1265,17 @@ class ZeldaGame {
             this.inventory.addItem('staff');
             this.inventory.currentWeaponIndex = this.inventory.weapons.findIndex(w => w.id === 'staff');
             console.log('🔮 Magic Staff added to inventory!');
+        } else if (item.type === 'staff') {
+            // Handle staff type (alternative naming)
+            this.inventory.addItem('staff');
+            this.inventory.currentWeaponIndex = this.inventory.weapons.findIndex(w => w.id === 'staff');
+            console.log('🔮 Magic Staff added to inventory!');
+        } else if (item.type === 'sword') {
+            // Add sword to inventory and switch to it
+            this.inventory.addItem('sword');
+            this.inventory.currentWeaponIndex = this.inventory.weapons.findIndex(w => w.id === 'sword');
+            this.player.equipSword(); // Also set the fallback flag
+            console.log('⚔️ Sword added to inventory!');
         }
         // Add other item types here as needed
     }
@@ -1533,6 +1599,66 @@ class ZeldaGame {
         this.currentRoom = null;
         
         console.log('🏠 Returned to title screen');
+    }
+    
+    // Debug method to test tileset coordinates
+    testTilesetCoordinates() {
+        if (!this.spriteLoader || !this.spriteLoader.tilesetLoaded) {
+            console.log('❌ Tileset not loaded yet!');
+            return;
+        }
+        
+        console.log('🔍 Testing tileset coordinates...');
+        
+        // Test extracting tiles from different coordinates
+        const testCoords = [
+            { x: 0, y: 0, name: 'Top-left' },
+            { x: 1, y: 0, name: 'Second tile' },
+            { x: 0, y: 1, name: 'Second row' },
+            { x: 5, y: 5, name: 'Middle area' },
+            { x: 10, y: 10, name: 'Further out' }
+        ];
+        
+        testCoords.forEach(coord => {
+            const tile = this.spriteLoader.getTileFromTileset(coord.x, coord.y);
+            if (tile) {
+                console.log(`✅ ${coord.name} (${coord.x}, ${coord.y}): Extracted successfully`);
+                
+                // Create a temporary debug display
+                const debugDiv = document.createElement('div');
+                debugDiv.style.cssText = `
+                    position: fixed; 
+                    top: ${50 + coord.y * 60}px; 
+                    left: ${50 + coord.x * 60}px; 
+                    background: rgba(0,0,0,0.8); 
+                    color: white; 
+                    padding: 5px; 
+                    border: 1px solid white;
+                    font-size: 12px;
+                    z-index: 1000;
+                `;
+                debugDiv.innerHTML = `${coord.name}<br>(${coord.x}, ${coord.y})`;
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = 48;
+                canvas.height = 48;
+                canvas.style.display = 'block';
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(tile, 0, 0, 48, 48);
+                
+                debugDiv.appendChild(canvas);
+                document.body.appendChild(debugDiv);
+                
+                // Remove after 5 seconds
+                setTimeout(() => {
+                    if (debugDiv.parentNode) {
+                        debugDiv.parentNode.removeChild(debugDiv);
+                    }
+                }, 5000);
+            } else {
+                console.log(`❌ ${coord.name} (${coord.x}, ${coord.y}): Failed to extract`);
+            }
+        });
     }
     
     showMessage(text, duration = 3000) {
