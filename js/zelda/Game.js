@@ -303,10 +303,6 @@ class ZeldaGame {
             
             // Pause menu controls
             if (this.gameState === 'paused') {
-                if (e.code === 'KeyS') {
-                    e.preventDefault();
-                    this.saveGame();
-                }
                 if (e.code === 'KeyQ') {
                     e.preventDefault();
                     this.quitToTitle();
@@ -331,18 +327,10 @@ class ZeldaGame {
                 }
             }
             
-            // Game over screen controls
+            // Game over screen controls - any key returns to title
             if (this.gameState === 'gameover') {
-                // R key - restart from last save
-                if (e.code === 'KeyR') {
-                    e.preventDefault();
-                    this.restartFromSave();
-                }
-                // Q key - quit to title screen
-                if (e.code === 'KeyQ') {
-                    e.preventDefault();
-                    this.quitToTitle();
-                }
+                e.preventDefault();
+                this.quitToTitle();
             }
             
             if (e.code === 'F1') {
@@ -504,14 +492,10 @@ class ZeldaGame {
             this.player.inventory = this.inventory;
             this.player.particleSystem = this.particleSystem;
             
-            // Try to load saved data
-            if (this.loadGame()) {
-                // Successfully loaded - start playing
-                this.gameState = 'playing';
-                console.log('🎮 Loaded saved game successfully!');
-                return true;
-            }
-            return false;
+            // Always start a new game
+            this.gameState = 'playing';
+            console.log('🎮 Starting new game!');
+            return true;
         } catch (error) {
             console.error('❌ Error loading game:', error);
             return false;
@@ -988,23 +972,26 @@ class ZeldaGame {
         // Options
         this.ctx.fillStyle = '#ffffff';
         this.ctx.font = 'bold 22px Arial';
-        this.ctx.fillText('R - Restart from Last Save', this.canvas.width / 2, panelY + 190);
-        
-        this.ctx.fillStyle = '#cccccc';
-        this.ctx.font = '22px Arial';
-        this.ctx.fillText('Q - Return to Title Screen', this.canvas.width / 2, panelY + 230);
+        this.ctx.fillText('Press ANY KEY to return to Title Screen', this.canvas.width / 2, panelY + 190);
         
         // Instructions
         this.ctx.fillStyle = '#999999';
-        this.ctx.font = '16px Arial';
-        this.ctx.fillText('Press the corresponding key to select an option', this.canvas.width / 2, panelY + 280);
+        this.ctx.font = '18px Arial';
+        this.ctx.fillText('You can start a new adventure from the main menu', this.canvas.width / 2, panelY + 230);
         
-        // Save status
-        const hasSave = localStorage.getItem('llamaKnightSave') !== null;
-        if (!hasSave) {
-            this.ctx.fillStyle = '#ff9999';
-            this.ctx.font = '14px Arial';
-            this.ctx.fillText('(No save file found - restart will begin new game)', this.canvas.width / 2, panelY + 310);
+        // Auto-return countdown
+        if (!this.gameOverStartTime) {
+            this.gameOverStartTime = Date.now();
+        }
+        const timeLeft = Math.max(0, 10 - Math.floor((Date.now() - this.gameOverStartTime) / 1000));
+        
+        this.ctx.fillStyle = '#cccccc';
+        this.ctx.font = '16px Arial';
+        this.ctx.fillText(`Automatically returning to title in ${timeLeft} seconds...`, this.canvas.width / 2, panelY + 280);
+        
+        // Auto-return after 10 seconds
+        if (timeLeft <= 0) {
+            this.quitToTitle();
         }
     }
     
@@ -1310,36 +1297,7 @@ class ZeldaGame {
         
         console.log(`✅ Spawned ${this.enemies.length} animals in ${this.currentRoom} room`);
     }
-    
-    saveGame() {
-        try {
-            const saveData = {
-                playerX: this.player.x,
-                playerY: this.player.y,
-                playerHealth: this.player.currentHealth,
-                playerMaxHealth: this.player.maxHealth,
-                playerStamina: this.player.currentStamina,
-                playerMaxStamina: this.player.maxStamina,
-                currentRoom: this.currentRoom,
-                playerHasArmor: this.player.hasArmor,
-                playerHasStaff: this.player.hasMagicStaff,
-                inventoryItems: this.inventory ? this.inventory.items : [],
-                inventoryWeaponIndex: this.inventory ? this.inventory.currentWeaponIndex : 0,
-                collectedItems: this.getAllCollectedItems(),
-                saveTime: new Date().toISOString()
-            };
-            
-            localStorage.setItem('llamaKnightSave', JSON.stringify(saveData));
-            console.log('💾 Game saved successfully!', saveData);
-            
-            // Show save confirmation
-            this.showMessage('Game Saved!', 2000);
-            
-        } catch (error) {
-            console.error('❌ Error saving game:', error);
-            this.showMessage('Save Failed!', 2000);
-        }
-    }
+
     
     validateSaveData(saveData) {
         if (!saveData) return false;
@@ -1389,99 +1347,7 @@ class ZeldaGame {
         return allCollectedItems;
     }
     
-    loadGame() {
-        try {
-            const saveData = JSON.parse(localStorage.getItem('llamaKnightSave'));
-            if (!saveData) {
-                console.log('No save data found');
-                return false;
-            }
-            
-            // Validate save data
-            if (!this.validateSaveData(saveData)) {
-                console.error('❌ Invalid save data detected');
-                this.showMessage('Save file corrupted!', 3000);
-                return false;
-            }
-            
-            console.log('📂 Loading valid save data:', saveData);
-            
-            // Restore player position
-            this.player.x = saveData.playerX;
-            this.player.y = saveData.playerY;
-            
-            // Restore player health and stamina
-            if (saveData.playerHealth !== undefined) {
-                this.player.currentHealth = Math.max(1, saveData.playerHealth); // Ensure at least 1 HP
-            }
-            if (saveData.playerMaxHealth !== undefined) {
-                this.player.maxHealth = saveData.playerMaxHealth;
-            }
-            if (saveData.playerStamina !== undefined) {
-                this.player.currentStamina = saveData.playerStamina;
-            }
-            if (saveData.playerMaxStamina !== undefined) {
-                this.player.maxStamina = saveData.playerMaxStamina;
-            }
-            
-            // Restore room
-            this.currentRoom = saveData.currentRoom;
-            this.gameMap = this.rooms[this.currentRoom];
-            
-            // Restore player equipment
-            if (saveData.playerHasArmor) {
-                this.player.equipArmor();
-            } else {
-                this.player.hasArmor = false;
-            }
-            if (saveData.playerHasStaff) {
-                this.player.equipMagicStaff();
-            } else {
-                this.player.hasMagicStaff = false;
-            }
-            
-            // Restore inventory
-            if (this.inventory && saveData.inventoryItems) {
-                this.inventory.items = [...saveData.inventoryItems]; // Create a copy
-            }
-            if (this.inventory && saveData.inventoryWeaponIndex !== undefined) {
-                this.inventory.currentWeaponIndex = Math.max(0, saveData.inventoryWeaponIndex);
-            }
-            
-            // Restore collected items across all rooms
-            if (saveData.collectedItems && Array.isArray(saveData.collectedItems)) {
-                saveData.collectedItems.forEach(savedItem => {
-                    try {
-                        const room = savedItem.room ? this.rooms[savedItem.room] : this.gameMap;
-                        if (room && room.items) {
-                            const item = room.items.find(mapItem => 
-                                mapItem.x === savedItem.x && 
-                                mapItem.y === savedItem.y && 
-                                mapItem.type === savedItem.type
-                            );
-                            if (item) {
-                                item.collected = true;
-                            }
-                        }
-                    } catch (error) {
-                        console.warn('❌ Error restoring collected item:', savedItem, error);
-                    }
-                });
-            }
-            
-            // Respawn enemies for current room
-            this.spawnEnemies();
-            
-            console.log('📂 Game loaded successfully!');
-            this.showMessage('Game Loaded!', 2000);
-            return true;
-            
-        } catch (error) {
-            console.error('❌ Error loading game:', error);
-            this.showMessage('Load Failed!', 2000);
-            return false;
-        }
-    }
+
     
     restartFromSave() {
         // Try to load from save first
@@ -1597,6 +1463,9 @@ class ZeldaGame {
         this.projectiles = [];
         this.rooms = {};
         this.currentRoom = null;
+        
+        // Reset game over timer
+        this.gameOverStartTime = null;
         
         console.log('🏠 Returned to title screen');
     }

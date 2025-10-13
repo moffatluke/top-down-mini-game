@@ -292,20 +292,140 @@ class SpriteLoader {
         const weaponsSheet = this.get('weapons_sheet');
         if (!weaponsSheet) return null;
         
-        // Detect weapon size based on sheet dimensions
-        // Common weapon sheet sizes are 16x16 or 32x32 per weapon
         const sheetWidth = weaponsSheet.width;
         const sheetHeight = weaponsSheet.height;
         
-        // Try to detect grid size (assume square weapons)
-        let weaponSize = 32; // Default
-        if (sheetWidth <= 256 && sheetHeight <= 256) {
-            weaponSize = 16; // Smaller sprites
-        } else if (sheetWidth <= 512 && sheetHeight <= 512) {
-            weaponSize = 32; // Medium sprites
+        console.log(`Weapons sheet dimensions: ${sheetWidth}x${sheetHeight}`);
+        
+        // Try common weapon sizes to find the right one
+        const commonSizes = [32, 24, 16, 48, 64];
+        
+        for (let weaponSize of commonSizes) {
+            // Check if this size makes sense for the sheet dimensions
+            const maxX = Math.floor(sheetWidth / weaponSize);
+            const maxY = Math.floor(sheetHeight / weaponSize);
+            
+            console.log(`Trying weapon size ${weaponSize}px: grid would be ${maxX}x${maxY}`);
+            
+            // Make sure position (1,4) exists in this grid
+            if (maxX > 1 && maxY > 4) {
+                console.log(`Using weapon size: ${weaponSize}px (position 1,4 is valid)`);
+                
+                // Create a canvas to extract just one sword
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = weaponSize;
+                canvas.height = weaponSize;
+                
+                // Clear the canvas first
+                ctx.clearRect(0, 0, weaponSize, weaponSize);
+                
+                // Extract the weapon from position (1,4)
+                ctx.drawImage(
+                    weaponsSheet,
+                    1 * weaponSize, 4 * weaponSize, weaponSize, weaponSize, // Source
+                    0, 0, weaponSize, weaponSize // Destination
+                );
+                
+                console.log(`Successfully extracted sword at size ${weaponSize}px`);
+                return canvas;
+            }
         }
         
-        console.log(`Using weapon size: ${weaponSize}px for sheet ${sheetWidth}x${sheetHeight}`);
-        return this.getWeaponSprite(1, 4, weaponSize);
+        // Fallback: if no size worked, use 32px
+        console.log(`No size worked, using fallback 32px`);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 32;
+        canvas.height = 32;
+        ctx.drawImage(weaponsSheet, 32, 128, 32, 32, 0, 0, 32, 32);
+        return canvas;
+    }
+
+    // Create a visual grid overlay for the weapons sprite sheet (like tileset)
+    createWeaponsGridOverlay() {
+        const weaponsSheet = this.get('weapons_sheet');
+        if (!weaponsSheet) {
+            console.log('Weapons sheet not loaded');
+            return null;
+        }
+
+        const sheetWidth = weaponsSheet.width;
+        const sheetHeight = weaponsSheet.height;
+        
+        // Try different weapon sizes to find the best grid
+        const testSizes = [16, 24, 32, 48, 64];
+        let bestSize = 32;
+        
+        for (let size of testSizes) {
+            const gridX = Math.floor(sheetWidth / size);
+            const gridY = Math.floor(sheetHeight / size);
+            if (gridX >= 4 && gridY >= 4) { // Want at least a 4x4 grid
+                bestSize = size;
+                break;
+            }
+        }
+        
+        console.log(`Creating weapons grid with ${bestSize}px weapon size`);
+        
+        const gridCols = Math.floor(sheetWidth / bestSize);
+        const gridRows = Math.floor(sheetHeight / bestSize);
+        
+        // Create a larger canvas for the grid overlay
+        const canvas = document.createElement('canvas');
+        canvas.width = sheetWidth;
+        canvas.height = sheetHeight;
+        const ctx = canvas.getContext('2d');
+        
+        // Draw the weapons sprite sheet
+        ctx.drawImage(weaponsSheet, 0, 0);
+        
+        // Add grid lines and coordinate labels
+        ctx.strokeStyle = '#ff0000'; // Red grid lines
+        ctx.lineWidth = 1;
+        ctx.fillStyle = '#ffff00'; // Yellow text
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        
+        // Draw vertical grid lines and column numbers
+        for (let x = 0; x <= gridCols; x++) {
+            const lineX = x * bestSize;
+            ctx.beginPath();
+            ctx.moveTo(lineX, 0);
+            ctx.lineTo(lineX, sheetHeight);
+            ctx.stroke();
+            
+            // Add column number
+            if (x < gridCols) {
+                ctx.fillText(x.toString(), lineX + bestSize/2, 15);
+            }
+        }
+        
+        // Draw horizontal grid lines and row numbers
+        for (let y = 0; y <= gridRows; y++) {
+            const lineY = y * bestSize;
+            ctx.beginPath();
+            ctx.moveTo(0, lineY);
+            ctx.lineTo(sheetWidth, lineY);
+            ctx.stroke();
+            
+            // Add row number
+            if (y < gridRows) {
+                ctx.fillText(y.toString(), 15, lineY + bestSize/2 + 4);
+            }
+        }
+        
+        // Add coordinate labels for each weapon
+        ctx.fillStyle = '#00ff00'; // Green coordinate text
+        ctx.font = 'bold 10px Arial';
+        for (let y = 0; y < gridRows; y++) {
+            for (let x = 0; x < gridCols; x++) {
+                const centerX = x * bestSize + bestSize/2;
+                const centerY = y * bestSize + bestSize/2;
+                ctx.fillText(`(${x},${y})`, centerX, centerY);
+            }
+        }
+        
+        return canvas;
     }
 }
