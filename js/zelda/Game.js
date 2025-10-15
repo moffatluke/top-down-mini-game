@@ -314,16 +314,7 @@ class ZeldaGame {
                 // Enter/Space - start new game
                 if (e.code === 'Enter' || e.code === 'Space') {
                     e.preventDefault();
-                    this.startGame();
-                }
-                // L key - load saved game
-                if (e.code === 'KeyL') {
-                    e.preventDefault();
-                    if (this.loadAndStartGame()) {
-                        console.log('Loading saved game...');
-                    } else {
-                        this.showMessage('No Save Found!', 2000);
-                    }
+                    this.startNewGame();
                 }
             }
             
@@ -923,13 +914,12 @@ class ZeldaGame {
         this.ctx.font = '20px Arial';
         this.ctx.fillStyle = '#ecf0f1';
         this.ctx.fillText('ESC - Resume Game', this.canvas.width / 2, menuY + 120);
-        this.ctx.fillText('S - Save Game', this.canvas.width / 2, menuY + 160);
-        this.ctx.fillText('Q - Quit to Title', this.canvas.width / 2, menuY + 200);
+        this.ctx.fillText('Q - Quit to Title', this.canvas.width / 2, menuY + 160);
         
         // Instructions
         this.ctx.font = '14px Arial';
         this.ctx.fillStyle = '#bdc3c7';
-        this.ctx.fillText('Press the corresponding key to select an option', this.canvas.width / 2, menuY + 240);
+        this.ctx.fillText('Press the corresponding key to select an option', this.canvas.width / 2, menuY + 200);
     }
     
     renderGameOverScreen() {
@@ -1298,112 +1288,10 @@ class ZeldaGame {
         console.log(`✅ Spawned ${this.enemies.length} animals in ${this.currentRoom} room`);
     }
 
-    
-    validateSaveData(saveData) {
-        if (!saveData) return false;
-        
-        // Check required fields
-        const requiredFields = ['playerX', 'playerY', 'currentRoom'];
-        for (let field of requiredFields) {
-            if (saveData[field] === undefined) {
-                console.warn(`❌ Save data missing required field: ${field}`);
-                return false;
-            }
-        }
-        
-        // Check if the saved room exists
-        if (this.rooms && !this.rooms[saveData.currentRoom]) {
-            console.warn(`❌ Save data references unknown room: ${saveData.currentRoom}`);
-            return false;
-        }
-        
-        // Validate numeric values
-        if (isNaN(saveData.playerX) || isNaN(saveData.playerY)) {
-            console.warn('❌ Save data has invalid player coordinates');
-            return false;
-        }
-        
-        return true;
-    }
-    
-    getAllCollectedItems() {
-        const allCollectedItems = [];
-        
-        // Collect items from all rooms
-        Object.keys(this.rooms).forEach(roomName => {
-            const room = this.rooms[roomName];
-            if (room && room.items) {
-                room.items.filter(item => item.collected).forEach(item => {
-                    allCollectedItems.push({
-                        x: item.x,
-                        y: item.y,
-                        type: item.type,
-                        room: roomName
-                    });
-                });
-            }
-        });
-        
-        return allCollectedItems;
-    }
-    
 
     
-    restartFromSave() {
-        // Try to load from save first
-        const saveData = localStorage.getItem('llamaKnightSave');
-        
-        if (saveData) {
-            console.log('🔄 Restarting from last save...');
-            
-            try {
-                // Reset game state to playing
-                this.gameState = 'playing';
-                
-                // Make sure all rooms are initialized
-                if (!this.rooms || Object.keys(this.rooms).length === 0) {
-                    this.setupRooms();
-                }
-                
-                // Make sure player and inventory exist
-                if (!this.player) {
-                    this.setupPlayer();
-                }
-                if (!this.inventory) {
-                    this.setupInventory();
-                    this.player.inventory = this.inventory;
-                }
-                
-                // Load the saved game state
-                if (this.loadGame()) {
-                    // Reset player health to full (since they died)
-                    this.player.currentHealth = this.player.maxHealth;
-                    this.player.currentStamina = this.player.maxStamina;
-                    
-                    // Clear any status effects
-                    this.player.isInvulnerable = false;
-                    this.player.invulnerabilityTimer = 0;
-                    this.player.hurtTimer = 0;
-                    
-                    // Clear projectiles and reset combat state
-                    this.projectiles = [];
-                    
-                    console.log('✅ Successfully restarted from save!');
-                    this.showMessage('Restarted from Save!', 2000);
-                } else {
-                    throw new Error('Failed to load save data');
-                }
-                
-            } catch (error) {
-                console.log('❌ Failed to load save, starting new game...', error);
-                this.startNewGame();
-            }
-        } else {
-            // No save file, start new game
-            console.log('💫 No save found, starting new game...');
-            this.startNewGame();
-        }
-    }
+
+
     
     startNewGame() {
         // Reset to initial game state

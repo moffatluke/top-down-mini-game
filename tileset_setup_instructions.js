@@ -47,7 +47,7 @@ The system is designed to:
 - Cache extracted tiles for performance
 - Fallback to original sprites if tileset fails
 
-Happy mapping! 🗺️
+Happy mapping! 
 */
 
 console.log('📋 Tileset setup instructions loaded!');
