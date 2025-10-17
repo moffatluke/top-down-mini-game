@@ -20,6 +20,12 @@ class SpriteLoader {
         this.onComplete = null;             // Callback function to run when all sprites loaded
         
         // =====================================================
+        // RANDOMIZED WEAPON SYSTEM
+        // =====================================================
+        this.selectedSword = null;          // Store the randomly selected sword for this playthrough
+        this.swordSelected = false;         // Track if we've already selected a sword
+        
+        // =====================================================
         // TILESET INTEGRATION SYSTEM
         // =====================================================
         this.tilesetExtractor = new TilesetExtractor();  // Handles extracting individual tiles from sprite sheet
@@ -287,8 +293,13 @@ class SpriteLoader {
         return canvas;
     }
 
-    // Get the specific sword at position 1,4
+    // Get a random sword from available sword positions (selected once per game)
     getSword() {
+        // If we already selected a sword for this playthrough, return it
+        if (this.swordSelected && this.selectedSword) {
+            return this.selectedSword;
+        }
+        
         const weaponsSheet = this.get('weapons_sheet');
         if (!weaponsSheet) return null;
         
@@ -297,48 +308,80 @@ class SpriteLoader {
         
         console.log(`Weapons sheet dimensions: ${sheetWidth}x${sheetHeight}`);
         
-        // Try common weapon sizes to find the right one
-        const commonSizes = [32, 24, 16, 48, 64];
+        // Use a fixed 16px weapon size (most common for pixel art)
+        const weaponSize = 16;
+        const maxX = Math.floor(sheetWidth / weaponSize);
+        const maxY = Math.floor(sheetHeight / weaponSize);
         
-        for (let weaponSize of commonSizes) {
-            // Check if this size makes sense for the sheet dimensions
-            const maxX = Math.floor(sheetWidth / weaponSize);
-            const maxY = Math.floor(sheetHeight / weaponSize);
-            
-            console.log(`Trying weapon size ${weaponSize}px: grid would be ${maxX}x${maxY}`);
-            
-            // Make sure position (1,4) exists in this grid
-            if (maxX > 1 && maxY > 4) {
-                console.log(`Using weapon size: ${weaponSize}px (position 1,4 is valid)`);
-                
-                // Create a canvas to extract just one sword
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                canvas.width = weaponSize;
-                canvas.height = weaponSize;
-                
-                // Clear the canvas first
-                ctx.clearRect(0, 0, weaponSize, weaponSize);
-                
-                // Extract the weapon from position (1,4)
-                ctx.drawImage(
-                    weaponsSheet,
-                    1 * weaponSize, 4 * weaponSize, weaponSize, weaponSize, // Source
-                    0, 0, weaponSize, weaponSize // Destination
-                );
-                
-                console.log(`Successfully extracted sword at size ${weaponSize}px`);
-                return canvas;
-            }
+        console.log(`Using weapon size: ${weaponSize}px, grid: ${maxX}x${maxY}`);
+        
+        // Define available sword positions (avoiding axes and other non-sword weapons)
+        const swordPositions = [
+            [1, 4],   // Original sword
+            [0, 4],   // Another sword option
+            [2, 4],   // Different sword
+            [3, 4],   // Another variant
+            [0, 5],   // Possible sword
+            [1, 5],   // Another option
+            [2, 5],   // Different style
+            [3, 5],   // Another sword
+            [0, 13],  // Different row swords
+            [1, 13],  // Another option
+            [3, 13],  // Sword variant
+            [4, 13],  // Another sword
+            [0, 14],  // More sword options
+            [1, 14],  // Different style
+            [4, 14],  // Another variant
+            [5, 14]   // Last option
+        ];
+        
+        // Randomly select a sword position (only once per game)
+        const randomIndex = Math.floor(Math.random() * swordPositions.length);
+        const [selectedX, selectedY] = swordPositions[randomIndex];
+        
+        // Check if the selected position is valid
+        if (maxX <= selectedX || maxY <= selectedY) {
+            console.warn(`Selected position (${selectedX},${selectedY}) not valid for ${weaponSize}px grid`);
+            // Fallback to a basic position if random one fails
+            const fallbackX = 1, fallbackY = 4;
+            if (maxX <= fallbackX || maxY <= fallbackY) return null;
+            this.selectedSword = this.extractWeapon(weaponsSheet, fallbackX, fallbackY, weaponSize);
+        } else {
+            console.log(`🎲 Randomly selected sword from position (${selectedX},${selectedY}) for this playthrough`);
+            this.selectedSword = this.extractWeapon(weaponsSheet, selectedX, selectedY, weaponSize);
         }
         
-        // Fallback: if no size worked, use 32px
-        console.log(`No size worked, using fallback 32px`);
+        // Mark that we've selected our sword for this playthrough
+        this.swordSelected = true;
+        return this.selectedSword;
+    }
+    
+    // Reset the sword selection (call this when starting a new game)
+    resetSwordSelection() {
+        this.swordSelected = false;
+        this.selectedSword = null;
+        console.log('🎲 Sword selection reset for new game');
+    }
+    
+    // Helper method to extract a weapon from specific coordinates
+    extractWeapon(weaponsSheet, x, y, weaponSize) {
+        // Create a canvas to extract just one weapon
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        canvas.width = 32;
-        canvas.height = 32;
-        ctx.drawImage(weaponsSheet, 32, 128, 32, 32, 0, 0, 32, 32);
+        canvas.width = weaponSize;
+        canvas.height = weaponSize;
+        
+        // Clear the canvas first
+        ctx.clearRect(0, 0, weaponSize, weaponSize);
+        
+        // Extract the weapon from the specified position
+        ctx.drawImage(
+            weaponsSheet,
+            x * weaponSize, y * weaponSize, weaponSize, weaponSize, // Source: specified position
+            0, 0, weaponSize, weaponSize // Destination: fill the canvas
+        );
+        
+        console.log(`Extracted weapon from position (${x},${y}) with size ${weaponSize}px`);
         return canvas;
     }
 

@@ -222,17 +222,20 @@ class ZeldaGame {
     handleMouseDown() {
         if (!this.player || !this.inventory) return;
         
-        // Only charge if staff is equipped
         const currentWeapon = this.inventory.getCurrentWeapon();
         console.log('🔍 Mouse down - Current weapon:', currentWeapon.id, currentWeapon.name);
-        if (currentWeapon.id !== 'staff') {
-            console.log('❌ Cannot charge - staff not equipped!');
-            return;
-        }
         
-        // Start charging the staff
-        console.log('⚡ Starting staff charge...');
-        this.player.startCharging();
+        if (currentWeapon.id === 'staff') {
+            // Staff charging
+            console.log('⚡ Starting staff charge...');
+            this.player.startCharging();
+        } else if (currentWeapon.id === 'sword') {
+            // Sword swinging
+            console.log('⚔️ Starting sword swing...');
+            this.player.startSwordSwing();
+        } else {
+            console.log('❌ No weapon equipped for mouse action!');
+        }
     }
     
     handleMouseUp() {
@@ -459,39 +462,7 @@ class ZeldaGame {
             this.errorMessage = `Game Start Error: ${error.message}`;
         }
     }
-    
-    loadAndStartGame() {
-        try {
-            // Create rooms first
-            console.log('📍 Creating main room...');
-            this.rooms['main'] = new ZeldaGameMap(this.spriteLoader, 'main');
-            console.log('📍 Creating staff room...');
-            this.rooms['staff_room'] = new ZeldaGameMap(this.spriteLoader, 'staff_room');
-            console.log('📍 Creating forest room...');
-            this.rooms['forest'] = new ZeldaGameMap(this.spriteLoader, 'forest');
-            console.log('📍 Creating grove room...');
-            this.rooms['grove'] = new ZeldaGameMap(this.spriteLoader, 'grove');
-            console.log('📍 Creating orchard room...');
-            this.rooms['orchard'] = new ZeldaGameMap(this.spriteLoader, 'orchard');
-            this.gameMap = this.rooms[this.currentRoom];
-            
-            // Create player and inventory (will be overwritten by load)
-            const spawnPos = this.gameMap.getSpawnPosition();
-            this.player = new ZeldaPlayer(spawnPos.x, spawnPos.y, this.spriteLoader);
-            this.inventory = new ZeldaInventory(this.spriteLoader);
-            this.particleSystem = new ParticleSystem();
-            this.player.inventory = this.inventory;
-            this.player.particleSystem = this.particleSystem;
-            
-            // Always start a new game
-            this.gameState = 'playing';
-            console.log('🎮 Starting new game!');
-            return true;
-        } catch (error) {
-            console.error('❌ Error loading game:', error);
-            return false;
-        }
-    }
+
 
     gameLoop(currentTime = performance.now()) {
         if (!this.isRunning) return;
@@ -864,14 +835,6 @@ class ZeldaGame {
         this.ctx.fillStyle = '#ffffff';
         this.ctx.font = '24px Arial';
         this.ctx.fillText('Press ENTER or SPACE to Start New Game', this.canvas.width / 2, 380);
-        
-        // Check if save exists
-        const hasSave = localStorage.getItem('llamaKnightSave') !== null;
-        if (hasSave) {
-            this.ctx.fillStyle = '#88ff88';
-            this.ctx.font = '20px Arial';
-            this.ctx.fillText('Press L to Load Saved Game', this.canvas.width / 2, 420);
-        }
         
         // Game info
         this.ctx.fillStyle = '#888888';
@@ -1297,20 +1260,23 @@ class ZeldaGame {
         // Reset to initial game state
         this.gameState = 'playing';
         
+        // Reset weapon selection for new playthrough
+        if (this.spriteLoader && this.spriteLoader.resetSwordSelection) {
+            this.spriteLoader.resetSwordSelection();
+        }
+        
         try {
             // Initialize a fresh game - start in main room
             this.currentRoom = 'main';
             
-            // Create rooms if they don't exist
-            if (!this.rooms || Object.keys(this.rooms).length === 0) {
-                console.log('📍 Creating rooms...');
-                this.rooms = {};
-                this.rooms['main'] = new ZeldaGameMap(this.spriteLoader, 'main');
-                this.rooms['staff_room'] = new ZeldaGameMap(this.spriteLoader, 'staff_room');
-                this.rooms['forest'] = new ZeldaGameMap(this.spriteLoader, 'forest');
-                this.rooms['grove'] = new ZeldaGameMap(this.spriteLoader, 'grove');
-                this.rooms['orchard'] = new ZeldaGameMap(this.spriteLoader, 'orchard');
-            }
+            // Always recreate rooms to reset items and state
+            console.log('📍 Creating fresh rooms...');
+            this.rooms = {};
+            this.rooms['main'] = new ZeldaGameMap(this.spriteLoader, 'main');
+            this.rooms['staff_room'] = new ZeldaGameMap(this.spriteLoader, 'staff_room');
+            this.rooms['forest'] = new ZeldaGameMap(this.spriteLoader, 'forest');
+            this.rooms['grove'] = new ZeldaGameMap(this.spriteLoader, 'grove');
+            this.rooms['orchard'] = new ZeldaGameMap(this.spriteLoader, 'orchard');
             
             // Set current map
             this.gameMap = this.rooms[this.currentRoom];
@@ -1344,13 +1310,15 @@ class ZeldaGame {
     quitToTitle() {
         this.gameState = 'title';
         
-        // Reset game objects but preserve sprite assets
+        // Reset game objects but preserve sprite assets and rooms
         this.player = null;
         this.gameMap = null;
         this.inventory = null;
         this.projectiles = [];
-        this.rooms = {};
-        this.currentRoom = null;
+        this.currentRoom = 'main'; // Reset to main room for next game
+        
+        // Don't clear rooms - reuse them for performance
+        // this.rooms = {}; // REMOVED - keep rooms for next game
         
         // Reset game over timer
         this.gameOverStartTime = null;

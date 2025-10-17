@@ -95,6 +95,15 @@ class ZeldaPlayer {
         this.inventory = [];                // Array: future inventory system for items
         
         // =====================================================
+        // SWORD COMBAT SYSTEM
+        // =====================================================
+        this.isSwinging = false;            // Boolean: true when sword swing is active
+        this.swingTimer = 0;                // Timer for sword swing animation
+        this.swingDuration = 300;           // Duration of sword swing in milliseconds
+        this.swingAngle = 0;                // Current angle of sword during swing
+        this.swingDirection = 1;            // Direction of swing: 1 for right, -1 for left
+        
+        // =====================================================
         // COLLISION DETECTION (hitbox smaller than sprite for better gameplay)
         // =====================================================
         // Hitbox scaled for 24px tiles (2x smaller than original 48px tiles)
@@ -181,6 +190,7 @@ class ZeldaPlayer {
         this.handleInput();                 // Process keyboard input and set movement vectors
         this.updateAnimation(deltaTime);    // Update walking animation and sprite frames
         this.updateCharging(deltaTime);     // Update charging system for special attacks
+        this.updateSwordSwing(deltaTime);   // Update sword swing animation and timing
         this.updateStamina(deltaTime);      // Handle stamina regeneration over time
         this.updateHealth(deltaTime);       // Update health timers and damage effects
         this.updateDash(deltaTime, gameMap);// Handle dash movement and collision
@@ -346,6 +356,22 @@ class ZeldaPlayer {
             this.animationFrame = 0;
             this.bobOffset = 0;
         }
+    }
+
+    updateSwordSwing(deltaTime) {
+        if (!this.isSwinging) return;
+        
+        // Update swing timer
+        this.swingTimer += deltaTime;
+        
+        // Simple swing duration check
+        if (this.swingTimer >= this.swingDuration) {
+            // Swing completed
+            this.isSwinging = false;
+            this.swingTimer = 0;
+            console.log('⚔️ Sword swing completed!');
+        }
+        // No angle updates for now - we'll add animation step by step
     }
 
     canMoveTo(x, y, gameMap) {
@@ -544,28 +570,49 @@ class ZeldaPlayer {
 
     equipMagicStaff() {
         this.hasMagicStaff = true;
-        console.log('🪄 Llama acquired magic staff!');
+        this.hasSword = false; // Can't hold both weapons
+        console.log('🪄 Llama equipped with magic staff! (Sword unequipped)');
     }
 
     equipSword() {
         this.hasSword = true;
-        console.log('⚔️ Llama equipped with sword!');
+        this.hasMagicStaff = false; // Can't hold both weapons
+        console.log('⚔️ Llama equipped with sword! (Staff unequipped)');
+    }
+
+    // Start a sword swing attack
+    startSwordSwing() {
+        // Check both new inventory system and fallback to old system
+        let hasSwordEquipped = false;
+        if (this.inventory) {
+            const currentWeapon = this.inventory.getCurrentWeapon();
+            hasSwordEquipped = (currentWeapon.id === 'sword');
+        } else {
+            hasSwordEquipped = this.hasSword; // Fallback to old system
+        }
+        
+        if (!hasSwordEquipped || this.isSwinging) {
+            console.log('❌ Cannot swing sword - not equipped or already swinging');
+            return;
+        }
+        
+        this.isSwinging = true;
+        this.swingTimer = 0;
+        this.swingAngle = -45; // Start swing position (90-degree arc: -45° to +45°)
+        
+        console.log('⚔️ Sword swing started!');
     }
 
     renderMagicStaff(ctx, shouldFlip) {
-        const staffSprite = this.spriteLoader.get('magic_staff');
+        const staffSprite = this.spriteLoader.getMagicStaff();
         if (!staffSprite) {
-            console.error('❌ Staff sprite not found! Available sprites:', Object.keys(this.spriteLoader.sprites || {}));
+            console.error('❌ Staff sprite not found!');
             return;
         }
-        console.log('✅ Staff sprite loaded:', staffSprite.width, 'x', staffSprite.height);
         
         // Calculate staff position relative to player (adjusted for smaller size)
         let staffOffsetX = shouldFlip ? -16 : 16;  // Closer to player since it's smaller
         let staffOffsetY = -4; // Slightly above center
-        
-        // Staff sprite is 2x3 grid - animate between frames
-        console.log('Staff sprite size:', staffSprite.width, 'x', staffSprite.height);
         
         // 2x3 grid: 2 columns, 3 rows
         const staffFrameWidth = staffSprite.width / 2;   // Each frame is half the width
@@ -627,36 +674,45 @@ class ZeldaPlayer {
             return;
         }
         
-        // Calculate sword position relative to player
-        let swordOffsetX = shouldFlip ? -18 : 18;  // Position to side of player
-        let swordOffsetY = 2; // Slightly below center
+        // Calculate sword position relative to player - at torso level, to the side
+        let swordOffsetX = shouldFlip ? -20 : 20;  // To the side of player
+        let swordOffsetY = 8; // Lower - at torso level, not face level (positive = down)
         
         // Make equipped sword smaller and proportional
         let renderWidth = 24;   // Smaller sword size
         let renderHeight = 24;
         
-        ctx.save();
+        // Calculate handle/grip position (where player holds the sword at torso)
+        const handleX = this.x + swordOffsetX;
+        const handleY = this.y + swordOffsetY + this.bobOffset;
         
-        // Flip sword to face away from the llama
+        ctx.save();
+        ctx.translate(handleX, handleY);  // Move to handle position (pivot point)
+        
+        // Handle facing direction - blade faces away from character
+        ctx.scale(-1, 1);  // Base flip so blade faces away
         if (shouldFlip) {
-            // Player facing left: flip both horizontally and vertically so sword points away
-            ctx.scale(-1, -1);
-            ctx.drawImage(
-                swordSprite,
-                0, 0, swordSprite.width, swordSprite.height,  // Full sprite
-                -(this.x + swordOffsetX + renderWidth/2), -(this.y + swordOffsetY + renderHeight/2 + this.bobOffset),
-                renderWidth, renderHeight
-            );
-        } else {
-            // Player facing right: flip vertically so sword points away
-            ctx.scale(1, -1);
-            ctx.drawImage(
-                swordSprite,
-                0, 0, swordSprite.width, swordSprite.height,  // Full sprite
-                this.x + swordOffsetX - renderWidth/2, -(this.y + swordOffsetY + renderHeight/2 + this.bobOffset),
-                renderWidth, renderHeight
-            );
+            ctx.scale(-1, 1);  // Extra flip for left-facing
         }
+        
+        // Apply swing rotation - blade extends outward during swing
+        if (this.isSwinging) {
+            const swingProgress = this.swingTimer / this.swingDuration;
+            
+            // Create an arc that extends the blade outward from the body
+            // Swing from side position to extended forward position
+            const baseAngle = 0; // Start at side
+            const maxExtension = shouldFlip ? -45 : 45; // Extend forward (opposite directions)
+            const currentSwingAngle = Math.sin(swingProgress * Math.PI) * maxExtension;
+            ctx.rotate(currentSwingAngle * Math.PI / 180);
+        }
+        
+        // Draw sword with handle at grip point, blade extending outward
+        ctx.drawImage(
+            swordSprite,
+            0, 0, swordSprite.width, swordSprite.height,
+            -6, -renderHeight + 8, renderWidth, renderHeight  // Handle near player, blade extends away
+        );
         
         ctx.restore();
     }

@@ -47,8 +47,8 @@ class ZeldaEnemy {
         this.animationTimer = 0;            // Timer to control animation speed
         this.animationSpeed = 300;          // Milliseconds per animation frame
         this.hurtTimer = 0;                 // Timer for hurt/damage visual effects
-        this.knockbackVelocityX = 0;        // Horizontal knockback velocity when hit
-        this.knockbackVelocityY = 0;        // Vertical knockback velocity when hit
+        this.knockbackVelocityX = 3;        // Horizontal knockback velocity when hit
+        this.knockbackVelocityY = 3;        // Vertical knockback velocity when hit
         
         // =====================================================
         // COMBAT AND DAMAGE SYSTEM
