@@ -10,13 +10,14 @@
  * - Sprite rendering and animation
  */
 class ZeldaPlayer {
-    constructor(x, y, spriteLoader) {
+    constructor(x, y, spriteLoader, game = null) {
         // =====================================================
         // POSITION AND CORE REFERENCES
         // =====================================================
         this.x = x;                         // Player's X position in pixels
         this.y = y;                         // Player's Y position in pixels
         this.spriteLoader = spriteLoader;   // Reference to sprite loading system
+        this.game = game;                   // Reference to game instance (for enemy access)
         this.inventory = null;              // Will be set by game - holds items like magic staff
         
         // =====================================================
@@ -601,6 +602,47 @@ class ZeldaPlayer {
         this.swingAngle = -45; // Start swing position (90-degree arc: -45° to +45°)
         
         console.log('⚔️ Sword swing started!');
+        
+        // Check for enemy damage when starting swing
+        this.checkSwordDamage();
+    }
+
+    // Check if sword hits any enemies during swing
+    checkSwordDamage() {
+        if (!this.game || !this.game.enemies) return;
+        
+        const swordDamage = 10; // Damage dealt by sword (reduced for multi-hit combat)
+        const swordRange = 40;  // Range of sword attack in pixels
+        
+        // Calculate sword tip position based on player facing direction
+        let swordTipX = this.x;
+        let swordTipY = this.y;
+        
+        if (this.facingDirection === 'right') {
+            swordTipX += swordRange;
+        } else if (this.facingDirection === 'left') {
+            swordTipX -= swordRange;
+        } else if (this.facingDirection === 'up') {
+            swordTipY -= swordRange;
+        } else if (this.facingDirection === 'down') {
+            swordTipY += swordRange;
+        }
+        
+        // Check collision with each enemy
+        for (let enemy of this.game.enemies) {
+            const distance = Math.sqrt(
+                Math.pow(enemy.x - swordTipX, 2) + 
+                Math.pow(enemy.y - swordTipY, 2)
+            );
+            
+            if (distance < 30) { // Hit range
+                // Deal damage to enemy
+                const damaged = enemy.takeDamage(swordDamage, this.x, this.y);
+                if (damaged) {
+                    console.log(`⚔️ Sword hit ${enemy.type} for ${swordDamage} damage!`);
+                }
+            }
+        }
     }
 
     renderMagicStaff(ctx, shouldFlip) {
@@ -689,29 +731,59 @@ class ZeldaPlayer {
         ctx.save();
         ctx.translate(handleX, handleY);  // Move to handle position (pivot point)
         
-        // Handle facing direction - blade faces away from character
-        ctx.scale(-1, 1);  // Base flip so blade faces away
+        // Handle facing direction first - simpler logic
         if (shouldFlip) {
-            ctx.scale(-1, 1);  // Extra flip for left-facing
+            ctx.scale(-1, 1);  // Flip for left-facing
         }
         
-        // Apply swing rotation - blade extends outward during swing
+        // Flip sword over x-axis to fix upside-down orientation
+        ctx.scale(1, -1);  // Flip vertically
+        
+        // Flip sword over y-axis to change direction it faces
+        ctx.scale(-1, 1);  // Flip horizontally
+        
+        // Flip it over the x axis again
+        ctx.scale(1, -1);  // Flip vertically again
+        
+        // Flip over y-axis again to fix blade direction
+        ctx.scale(-1, 1);  // Flip horizontally again
+        
+        // Start with sword pointing straight down (blade down, handle up)
+        ctx.rotate(90 * Math.PI / 180);  // Rotate 90 degrees to point straight down
+        
+        // Apply jab motion - sword rotates then thrusts forward
         if (this.isSwinging) {
             const swingProgress = this.swingTimer / this.swingDuration;
             
-            // Create an arc that extends the blade outward from the body
-            // Swing from side position to extended forward position
-            const baseAngle = 0; // Start at side
-            const maxExtension = shouldFlip ? -45 : 45; // Extend forward (opposite directions)
-            const currentSwingAngle = Math.sin(swingProgress * Math.PI) * maxExtension;
-            ctx.rotate(currentSwingAngle * Math.PI / 180);
+            // Two-phase animation: rotate forward, then thrust forward
+            if (swingProgress < 0.4) {
+                // Phase 1: Rotate toward attack direction (first 40% of animation)
+                const rotateProgress = swingProgress / 0.4;
+                const currentRotation = rotateProgress * -45; // Rotate -45 degrees (forward/right)
+                ctx.rotate(currentRotation * Math.PI / 180);
+            } else {
+                // Phase 2: Hold rotation and thrust forward horizontally (remaining 60%)
+                ctx.rotate(-45 * Math.PI / 180); // Hold at -45 degrees
+                
+                const thrustProgress = (swingProgress - 0.4) / 0.6;
+                const jabDistance = 30; // pixels to thrust forward
+                const currentJabOffset = Math.sin(thrustProgress * Math.PI) * jabDistance;
+                
+                // Thrust forward horizontally - move along X axis only
+                ctx.translate(0, -currentJabOffset);  // Move up (negative Y) to thrust forward
+            }
         }
         
-        // Draw sword with handle at grip point, blade extending outward
+        // Set anchor point - at the very end of the grip (pommel end)
+        const anchorX = renderWidth / 2;  // Center horizontally 
+        const anchorY = renderHeight;     // At the very bottom end of the sword (pommel)
+        
+        // Draw sword with the anchor point at the origin (0,0)
+        // This makes the end of the grip the pivot point for all rotations
         ctx.drawImage(
             swordSprite,
             0, 0, swordSprite.width, swordSprite.height,
-            -6, -renderHeight + 8, renderWidth, renderHeight  // Handle near player, blade extends away
+            -anchorX, -anchorY, renderWidth, renderHeight  // Anchor at grip end
         );
         
         ctx.restore();

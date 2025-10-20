@@ -434,7 +434,7 @@ class ZeldaGame {
             // Create player at spawn position
             console.log('🦙 Creating player...');
             const spawnPos = this.gameMap.getSpawnPosition();
-            this.player = new ZeldaPlayer(spawnPos.x, spawnPos.y, this.spriteLoader);
+            this.player = new ZeldaPlayer(spawnPos.x, spawnPos.y, this.spriteLoader, this);
             console.log('✅ Player created at:', spawnPos.x, spawnPos.y);
             
             // Create inventory system
@@ -1283,7 +1283,7 @@ class ZeldaGame {
             
             // Create fresh player at spawn position
             const spawnPos = this.gameMap.getSpawnPosition();
-            this.player = new ZeldaPlayer(spawnPos.x, spawnPos.y, this.spriteLoader);
+            this.player = new ZeldaPlayer(spawnPos.x, spawnPos.y, this.spriteLoader, this);
             
             // Create fresh inventory and particle system
             this.inventory = new ZeldaInventory(this.spriteLoader);
