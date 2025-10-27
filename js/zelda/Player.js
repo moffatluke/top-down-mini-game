@@ -100,9 +100,20 @@ class ZeldaPlayer {
         // =====================================================
         this.isSwinging = false;            // Boolean: true when sword swing is active
         this.swingTimer = 0;                // Timer for sword swing animation
-        this.swingDuration = 300;           // Duration of sword swing in milliseconds
+        this.swingDuration = 150;           // Duration of sword swing in milliseconds (faster - was 300)
         this.swingAngle = 0;                // Current angle of sword during swing
         this.swingDirection = 1;            // Direction of swing: 1 for right, -1 for left
+        
+        // ADVANCED SWORD COMBO SYSTEM
+        this.swordState = 'upright';        // Sword position: 'upright', 'down', 'horizontal', 'swinging_down', 'swinging_up', 'stabbing'
+        this.comboCount = 0;                // Number of consecutive attacks (0-3)
+        this.comboResetTimer = 0;           // Timer to reset combo after inactivity
+        this.comboResetDelay = 3000;        // 3 seconds before combo resets
+        this.swordHoldTimer = 0;            // Timer for holding sword in down position
+        this.comboCount = 0;                // Number of consecutive attacks (0-3)
+        this.comboResetTimer = 0;           // Timer to reset combo after inactivity
+        this.comboResetDelay = 3000;        // 3 seconds before combo resets
+        this.swordHoldTimer = 0;            // Timer for holding sword in down position
         
         // =====================================================
         // COLLISION DETECTION (hitbox smaller than sprite for better gameplay)
@@ -360,19 +371,49 @@ class ZeldaPlayer {
     }
 
     updateSwordSwing(deltaTime) {
+        // Update combo reset timer
+        if (this.comboCount > 0) {
+            this.comboResetTimer += deltaTime;
+            if (this.comboResetTimer >= this.comboResetDelay) {
+                // Reset combo after 3 seconds of inactivity
+                this.comboCount = 0;
+                this.comboResetTimer = 0;
+                this.swordState = 'upright';
+                this.swordHoldTimer = 0;
+                console.log('🔄 Sword combo reset to upright position');
+            }
+        }
+        
+        // Handle sword holding in down position
+        if (this.swordState === 'down') {
+            this.swordHoldTimer += deltaTime;
+        }
+        
+        // Handle active swing animations
         if (!this.isSwinging) return;
         
-        // Update swing timer
         this.swingTimer += deltaTime;
         
-        // Simple swing duration check
         if (this.swingTimer >= this.swingDuration) {
-            // Swing completed
+            // Swing animation completed
             this.isSwinging = false;
             this.swingTimer = 0;
-            console.log('⚔️ Sword swing completed!');
+            
+            // Determine end state based on combo
+            if (this.swordState === 'swinging_down') {
+                this.swordState = 'down';
+                this.swordHoldTimer = 0;
+                console.log('⚔️ Sword held in down position');
+            } else if (this.swordState === 'swinging_up') {
+                this.swordState = 'horizontal';
+                console.log('⚔️ Sword at horizontal position');
+            } else if (this.swordState === 'stabbing') {
+                // After stab, return to upright position
+                this.swordState = 'upright';
+                this.comboCount = 0; // Reset combo after stab
+                console.log('⚔️ Stab completed, returned to upright');
+            }
         }
-        // No angle updates for now - we'll add animation step by step
     }
 
     canMoveTo(x, y, gameMap) {
@@ -597,11 +638,32 @@ class ZeldaPlayer {
             return;
         }
         
+        // Reset combo timer since we're attacking
+        this.comboResetTimer = 0;
+        this.comboCount++;
+        
+        // Determine attack type based on combo count and current state
+        if (this.comboCount === 1) {
+            // First attack: swing down 180 degrees
+            this.swordState = 'swinging_down';
+            console.log('⚔️ Combo 1: Downward swing');
+        } else if (this.comboCount === 2 && this.swordState === 'down') {
+            // Second attack: swing back up to horizontal
+            this.swordState = 'swinging_up';
+            console.log('⚔️ Combo 2: Upward swing');
+        } else if (this.comboCount === 3 && this.swordState === 'horizontal') {
+            // Third attack: stab motion from horizontal position
+            this.swordState = 'stabbing';
+            console.log('⚔️ Combo 3: Stab attack!');
+        } else {
+            // Invalid combo state, reset
+            this.comboCount = 1;
+            this.swordState = 'swinging_down';
+            console.log('⚔️ Reset to downward swing');
+        }
+        
         this.isSwinging = true;
         this.swingTimer = 0;
-        this.swingAngle = -45; // Start swing position (90-degree arc: -45° to +45°)
-        
-        console.log('⚔️ Sword swing started!');
         
         // Check for enemy damage when starting swing
         this.checkSwordDamage();
@@ -646,7 +708,7 @@ class ZeldaPlayer {
     }
 
     renderMagicStaff(ctx, shouldFlip) {
-        const staffSprite = this.spriteLoader.getMagicStaff();
+        const staffSprite = this.spriteLoader.get('magic_staff');
         if (!staffSprite) {
             console.error('❌ Staff sprite not found!');
             return;
@@ -665,8 +727,6 @@ class ZeldaPlayer {
         const animationFrame = Math.floor(time) % 2; // Alternate between 0 and 1
         const frameX = animationFrame * staffFrameWidth;  // Column 0 or 1
         const frameY = 0;  // Top row
-        
-        console.log(`Animating staff frame: ${staffFrameWidth}x${staffFrameHeight} at ${frameX},${frameY}`);
         
         ctx.save();
         
@@ -716,9 +776,9 @@ class ZeldaPlayer {
             return;
         }
         
-        // Calculate sword position relative to player - at torso level, to the side
-        let swordOffsetX = shouldFlip ? -20 : 20;  // To the side of player
-        let swordOffsetY = 8; // Lower - at torso level, not face level (positive = down)
+        // Calculate sword position relative to player - closer to body, at torso level
+        let swordOffsetX = shouldFlip ? -12 : 12;  // Closer to the side of player (was -20/20)
+        let swordOffsetY = 6; // Slightly closer to center torso level (was 8)
         
         // Make equipped sword smaller and proportional
         let renderWidth = 24;   // Smaller sword size
@@ -736,42 +796,46 @@ class ZeldaPlayer {
             ctx.scale(-1, 1);  // Flip for left-facing
         }
         
-        // Flip sword over x-axis to fix upside-down orientation
-        ctx.scale(1, -1);  // Flip vertically
+        // Rotate sword to make it vertical with proper orientation
+        // Sprite is at 45 degrees from vertical (135° total), add 180° to flip it right-side up
+        ctx.rotate(45 * Math.PI / 180);  // Rotate 45 degrees to point straight up with handle toward player
         
-        // Flip sword over y-axis to change direction it faces
-        ctx.scale(-1, 1);  // Flip horizontally
+        // Apply sword animations based on state
+        let additionalRotation = 0;
+        let stabOffset = 0;
         
-        // Flip it over the x axis again
-        ctx.scale(1, -1);  // Flip vertically again
-        
-        // Flip over y-axis again to fix blade direction
-        ctx.scale(-1, 1);  // Flip horizontally again
-        
-        // Start with sword pointing straight down (blade down, handle up)
-        ctx.rotate(90 * Math.PI / 180);  // Rotate 90 degrees to point straight down
-        
-        // Apply jab motion - sword rotates then thrusts forward
         if (this.isSwinging) {
             const swingProgress = this.swingTimer / this.swingDuration;
             
-            // Two-phase animation: rotate forward, then thrust forward
-            if (swingProgress < 0.4) {
-                // Phase 1: Rotate toward attack direction (first 40% of animation)
-                const rotateProgress = swingProgress / 0.4;
-                const currentRotation = rotateProgress * -45; // Rotate -45 degrees (forward/right)
-                ctx.rotate(currentRotation * Math.PI / 180);
-            } else {
-                // Phase 2: Hold rotation and thrust forward horizontally (remaining 60%)
-                ctx.rotate(-45 * Math.PI / 180); // Hold at -45 degrees
-                
-                const thrustProgress = (swingProgress - 0.4) / 0.6;
-                const jabDistance = 30; // pixels to thrust forward
-                const currentJabOffset = Math.sin(thrustProgress * Math.PI) * jabDistance;
-                
-                // Thrust forward horizontally - move along X axis only
-                ctx.translate(0, -currentJabOffset);  // Move up (negative Y) to thrust forward
+            if (this.swordState === 'swinging_down') {
+                // Swing down 180 degrees (full swing)
+                additionalRotation = swingProgress * 180; // 0 to 180 degrees
+            } else if (this.swordState === 'swinging_up') {
+                // Swing up from down position to halfway (180 to 90 degrees)
+                additionalRotation = 180 - (swingProgress * 90); // 180 to 90 degrees
+            } else if (this.swordState === 'stabbing') {
+                // Stab motion - stay horizontal (90°) and thrust forward/back
+                additionalRotation = 90; // Keep horizontal orientation
+                stabOffset = Math.sin(swingProgress * Math.PI) * 25; // Forward thrust (increased distance)
             }
+        } else {
+            // Static positions when not swinging
+            if (this.swordState === 'down') {
+                additionalRotation = 180; // Hold at 180 degrees down
+            } else if (this.swordState === 'horizontal') {
+                additionalRotation = 90; // Hold at 90 degrees (horizontal)
+            }
+            // 'upright' state has no additional rotation (base vertical position)
+        }
+        
+        // Apply rotation first
+        ctx.rotate(additionalRotation * Math.PI / 180);
+        
+        // Apply stab offset AFTER rotation (in rotated coordinates)
+        if (stabOffset > 0) {
+            // When sword is horizontal, thrust straight up in the rotated space = forward
+            // This should make it go straight forward (north) instead of southwest
+            ctx.translate(0, -stabOffset); // Move up in rotated coordinate system = forward thrust
         }
         
         // Set anchor point - at the very end of the grip (pommel end)
@@ -931,6 +995,12 @@ class ZeldaPlayer {
 
     // Get staff world position for fireball spawning (from the red tip)
     getStaffWorldPosition() {
+        // Safety check for valid player position
+        if (!isFinite(this.x) || !isFinite(this.y)) {
+            console.warn('Invalid player position in getStaffWorldPosition, using default');
+            return { x: 120, y: 120 };
+        }
+        
         // Calculate which side the staff is on based on facing direction
         const shouldFlip = (this.facingDirection === 'left');
         
@@ -942,10 +1012,16 @@ class ZeldaPlayer {
         // Staff is rendered vertically, so we move up to get the tip
         const staffTipOffsetY = -18; // Move up to the red tip of the staff
         
-        return {
-            x: this.x + staffOffsetX,
-            y: this.y + staffOffsetY + staffTipOffsetY
-        };
+        const staffX = this.x + staffOffsetX;
+        const staffY = this.y + staffOffsetY + staffTipOffsetY;
+        
+        // Safety check for final coordinates
+        if (!isFinite(staffX) || !isFinite(staffY)) {
+            console.warn('Invalid staff position calculated, using player position');
+            return { x: this.x, y: this.y };
+        }
+        
+        return { x: staffX, y: staffY };
     }
 
     // Get current sprite based on equipment

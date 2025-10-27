@@ -30,6 +30,13 @@ class ZeldaGame {
         this.fpsTimer = 0;                  // Timer for FPS updates
         
         // =====================================================
+        // AUDIO SYSTEM
+        // =====================================================
+        this.backgroundMusic = null;        // Background music audio element
+        this.isMusicEnabled = true;         // Whether music is enabled
+        this.musicVolume = 0.5;            // Music volume (0.0 to 1.0)
+        
+        // =====================================================
         // INPUT SYSTEM
         // =====================================================
         this.keys = {};                     // Object tracking which keys are currently pressed
@@ -103,6 +110,9 @@ class ZeldaGame {
         
         // Setup canvas
         this.ctx.imageSmoothingEnabled = false; // Pixel-perfect rendering
+        
+        // Initialize audio system
+        this.initAudio();
         
         // Clear canvas with a test color to verify it's working
         this.ctx.fillStyle = '#004400';
@@ -193,6 +203,19 @@ class ZeldaGame {
         let cameraY = 0;
         
         if (this.player && this.gameMap) {
+            // Safety check for valid player position
+            if (!isFinite(this.player.x) || !isFinite(this.player.y)) {
+                console.warn('Invalid player position detected, resetting player to spawn');
+                this.player.x = 120;
+                this.player.y = 120;
+            }
+            
+            // Safety check for valid zoom
+            if (!this.zoom || this.zoom <= 0 || !isFinite(this.zoom)) {
+                console.warn('Invalid zoom in camera calculation, resetting to 1.5');
+                this.zoom = 1.5;
+            }
+            
             // Center camera on player
             cameraX = (this.canvas.width / this.zoom / 2) - this.player.x;
             cameraY = (this.canvas.height / this.zoom / 2) - this.player.y;
@@ -203,6 +226,13 @@ class ZeldaGame {
             
             cameraX = Math.min(0, Math.max(cameraX, (this.canvas.width / this.zoom) - mapWidth));
             cameraY = Math.min(0, Math.max(cameraY, (this.canvas.height / this.zoom) - mapHeight));
+            
+            // Final safety check for camera values
+            if (!isFinite(cameraX) || !isFinite(cameraY)) {
+                console.warn('Invalid camera position calculated, using defaults');
+                cameraX = 0;
+                cameraY = 0;
+            }
         }
         
         return { x: cameraX, y: cameraY };
@@ -214,9 +244,22 @@ class ZeldaGame {
         // Get the actual camera position used in rendering
         const camera = this.calculateCameraPosition();
         
-        // Convert screen coordinates to world coordinates
+        // Safety check for valid zoom value
+        if (!this.zoom || this.zoom <= 0 || !isFinite(this.zoom)) {
+            console.warn('Invalid zoom value detected, resetting to 1.5');
+            this.zoom = 1.5;
+        }
+        
+        // Convert screen coordinates to world coordinates with safety checks
         this.worldMouseX = (this.mouseX / this.zoom) - camera.x;
         this.worldMouseY = (this.mouseY / this.zoom) - camera.y;
+        
+        // Safety check for invalid world coordinates
+        if (!isFinite(this.worldMouseX) || !isFinite(this.worldMouseY)) {
+            console.warn('Invalid world mouse coordinates detected, resetting');
+            this.worldMouseX = this.player.x;
+            this.worldMouseY = this.player.y;
+        }
     }
     
     handleMouseDown() {
@@ -261,6 +304,13 @@ class ZeldaGame {
         // Calculate staff position based on player's facing direction
         const staffOffset = this.player.getStaffWorldPosition();
         
+        // Safety check for valid coordinates before creating projectile
+        if (!isFinite(staffOffset.x) || !isFinite(staffOffset.y) || 
+            !isFinite(this.worldMouseX) || !isFinite(this.worldMouseY)) {
+            console.warn('Invalid coordinates for projectile creation, skipping');
+            return;
+        }
+        
         // Create fireball projectile from staff position
         const projectileType = chargeInfo.charged ? 'charged_fireball' : 'fireball';
         const fireball = new ZeldaProjectile(
@@ -302,6 +352,13 @@ class ZeldaGame {
                     this.gameState = 'playing';
                     console.log('Game resumed');
                 }
+            }
+            
+            // M key - toggle music on/off
+            if (e.code === 'KeyM') {
+                e.preventDefault();
+                const musicState = this.toggleMusic();
+                this.showMessage(`Music ${musicState ? 'ON' : 'OFF'}`, 2000);
             }
             
             // Pause menu controls
@@ -415,6 +472,9 @@ class ZeldaGame {
     startGame() {
         console.log('🎮 Starting new game...');
         this.gameState = 'playing';
+        
+        // Start background music
+        this.startBackgroundMusic();
         
         try {
             // Create rooms
@@ -578,63 +638,6 @@ class ZeldaGame {
         }
     }
 
-    checkCombat() {
-        if (!this.player || this.enemies.length === 0) return;
-        
-        // Check projectile vs enemy collisions
-        for (let i = this.projectiles.length - 1; i >= 0; i--) {
-            const projectile = this.projectiles[i];
-            if (!projectile.active) continue;
-            
-            for (let j = this.enemies.length - 1; j >= 0; j--) {
-                const enemy = this.enemies[j];
-                if (enemy.aiState === 'dead') continue;
-                
-                // Check collision
-                if (enemy.checkCollision(projectile.x - projectile.size/2, 
-                                       projectile.y - projectile.size/2, 
-                                       projectile.size, 
-                                       projectile.size)) {
-                    
-                    console.log(`🎯 Projectile hit enemy! Damage: ${projectile.damage}`);
-                    
-                    // Deal damage to enemy
-                    const enemyDied = enemy.takeDamage(projectile.damage, projectile.x, projectile.y);
-                    
-                    if (enemyDied) {
-                        console.log('💀 Enemy defeated by projectile!');
-                    }
-                    
-                    // Remove projectile
-                    projectile.active = false;
-                    
-                    // Create explosion effect for charged fireballs
-                    if (projectile.isCharged && projectile.explosionRadius > 0) {
-                        this.createExplosion(projectile.x, projectile.y, projectile.explosionRadius);
-                        
-                        // Damage other nearby enemies
-                        for (let k = 0; k < this.enemies.length; k++) {
-                            if (k === j) continue; // Skip the enemy we already hit
-                            const otherEnemy = this.enemies[k];
-                            if (otherEnemy.aiState === 'dead') continue;
-                            
-                            const distance = Math.sqrt(
-                                Math.pow(otherEnemy.x - projectile.x, 2) + 
-                                Math.pow(otherEnemy.y - projectile.y, 2)
-                            );
-                            
-                            if (distance <= projectile.explosionRadius) {
-                                otherEnemy.takeDamage(Math.floor(projectile.damage * 0.7), projectile.x, projectile.y);
-                            }
-                        }
-                    }
-                    
-                    break; // Projectile can only hit one enemy at a time
-                }
-            }
-        }
-    }
-
     updateEnemies(deltaTime) {
         // Update all enemies
         for (let i = this.enemies.length - 1; i >= 0; i--) {
@@ -663,8 +666,14 @@ class ZeldaGame {
                 
                 // Check collision between projectile and enemy
                 if (projectile.checkCollision(enemy)) {
+                    console.log(`🔥 ${projectile.isCharged ? 'CHARGED' : 'Normal'} fireball hit ${enemy.type}! Damage: ${projectile.damage}`);
+                    
                     // Deal damage to enemy
                     const died = enemy.takeDamage(projectile.damage, projectile.x, projectile.y);
+                    
+                    if (died) {
+                        console.log(`💀 ${enemy.type} was defeated by fireball!`);
+                    }
                     
                     // Remove projectile
                     projectile.active = false;
@@ -843,6 +852,7 @@ class ZeldaGame {
         this.ctx.fillText('• Collect armor and magical staffs', this.canvas.width / 2, 510);
         this.ctx.fillText('• Cast powerful charged fireballs', this.canvas.width / 2, 540);
         this.ctx.fillText('• Use WASD to move, Mouse to aim & shoot', this.canvas.width / 2, 570);
+        this.ctx.fillText('• Press M to toggle music, ESC to pause', this.canvas.width / 2, 600);
         
         // Version info
         this.ctx.fillStyle = '#555555';
@@ -1204,11 +1214,13 @@ class ZeldaGame {
             // Add to inventory and switch to it
             this.inventory.addItem('staff');
             this.inventory.currentWeaponIndex = this.inventory.weapons.findIndex(w => w.id === 'staff');
+            this.player.equipMagicStaff(); // Also set the fallback flag
             console.log('🔮 Magic Staff added to inventory!');
         } else if (item.type === 'staff') {
             // Handle staff type (alternative naming)
             this.inventory.addItem('staff');
             this.inventory.currentWeaponIndex = this.inventory.weapons.findIndex(w => w.id === 'staff');
+            this.player.equipMagicStaff(); // Also set the fallback flag
             console.log('🔮 Magic Staff added to inventory!');
         } else if (item.type === 'sword') {
             // Add sword to inventory and switch to it
@@ -1395,5 +1407,82 @@ class ZeldaGame {
             this.messageText = '';
             this.messageTimer = 0;
         }, duration);
+    }
+    
+    // =====================================================
+    // AUDIO SYSTEM
+    // =====================================================
+    
+    initAudio() {
+        console.log('🎵 Initializing audio system...');
+        
+        try {
+            // Create audio element for background music
+            this.backgroundMusic = new Audio('assets/audio/video game music for luke - 9_25_25, 22.43.m4a');
+            this.backgroundMusic.loop = true;
+            this.backgroundMusic.volume = this.musicVolume;
+            
+            // Add event listeners
+            this.backgroundMusic.addEventListener('canplaythrough', () => {
+                console.log('🎵 Background music loaded and ready to play');
+            });
+            
+            this.backgroundMusic.addEventListener('error', (e) => {
+                console.error('❌ Error loading background music:', e);
+            });
+            
+            console.log('✅ Audio system initialized');
+        } catch (error) {
+            console.error('❌ Failed to initialize audio system:', error);
+        }
+    }
+    
+    startBackgroundMusic() {
+        if (this.backgroundMusic && this.isMusicEnabled) {
+            try {
+                const playPromise = this.backgroundMusic.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        console.log('🎵 Background music started');
+                    }).catch((error) => {
+                        console.warn('⚠️ Autoplay prevented - music will start on user interaction:', error);
+                    });
+                }
+            } catch (error) {
+                console.error('❌ Error starting background music:', error);
+            }
+        }
+    }
+    
+    stopBackgroundMusic() {
+        if (this.backgroundMusic) {
+            this.backgroundMusic.pause();
+            this.backgroundMusic.currentTime = 0;
+            console.log('🔇 Background music stopped');
+        }
+    }
+    
+    toggleMusic() {
+        this.isMusicEnabled = !this.isMusicEnabled;
+        
+        if (this.isMusicEnabled) {
+            this.startBackgroundMusic();
+        } else {
+            this.stopBackgroundMusic();
+        }
+        
+        console.log(`🎵 Music ${this.isMusicEnabled ? 'enabled' : 'disabled'}`);
+        return this.isMusicEnabled;
+    }
+    
+    setMusicVolume(volume) {
+        this.musicVolume = Math.max(0, Math.min(1, volume)); // Clamp between 0 and 1
+        
+        if (this.backgroundMusic) {
+            this.backgroundMusic.volume = this.musicVolume;
+        }
+        
+        console.log(`🔊 Music volume set to ${Math.round(this.musicVolume * 100)}%`);
     }
 }

@@ -201,12 +201,14 @@ class ZeldaProjectile {
         }
     }
     
-    // Check if projectile hits a target (for future enemy system)
+    // Check if projectile hits a target (for enemy collision)
     checkCollision(target) {
         const dx = this.x - target.x;
         const dy = this.y - target.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
-        return distance < (this.size + target.hitboxWidth / 2);
+        // Use the target's width property (enemies have width, not hitboxWidth)
+        const targetSize = target.width || target.hitboxWidth || 24;
+        return distance < (this.size + targetSize / 2);
     }
 }
