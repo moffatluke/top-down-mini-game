@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Llama Knight Adventure - Clean & Simple</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Courier New', monospace;
+            color: white;
+        }
+
+        #gameContainer {
+            position: relative;
+            background: #000;
+            border: 4px solid #333;
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(0,100,255,0.3);
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        #gameCanvas {
+            display: block;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 12px;
+            text-shadow: 2px 2px 4px #000;
+            pointer-events: none;
+            background: rgba(0,0,0,0.3);
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+
+        #controls {
+            color: #ccc;
+            font-size: 14px;
+            text-align: center;
+            max-width: 800px;
+            line-height: 1.4;
+        }
+
+        .control-section {
+            margin: 10px 0;
+            padding: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+        }
+
+        .key {
+            background: #333;
+            color: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+            margin: 0 2px;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00ff88;
+            font-size: 18px;
+            text-align: center;
+        }
+
+        .spinner {
+            border: 3px solid #333;
+            border-top: 3px solid #00ff88;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 5px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🦙 Llama Knight Adventure</h1>
+    
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="1024" height="768"></canvas>
+        <div id="ui">
+            <div>🎮 Llama Knight Adventure</div>
+            <div id="debug"></div>
+        </div>
+        <div id="loading">
+            <div class="spinner"></div>
+            <div>Loading your adventure...</div>
+        </div>
+    </div>
+
+    <div id="controls">
+        <div class="control-section">
+            <strong>🕹️ Movement:</strong> <span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> or Arrow Keys
+        </div>
+        <div class="control-section">
+            <strong>⚔️ Combat:</strong> <span class="key">Mouse</span> Aim & Shoot (Staff) • <span class="key">Left Click</span> Attack
+        </div>
+        <div class="control-section">
+            <strong>🎒 Inventory:</strong> <span class="key">1</span><span class="key">2</span><span class="key">3</span> Select Weapon • <span class="key">I</span> Toggle Inventory
+        </div>
+        <div class="control-section">
+            <strong>🏃 Special:</strong> <span class="key">Space</span> Dash • <span class="key">+</span><span class="key">-</span> Zoom • <span class="key">F1</span> Debug Mode
+        </div>
+        <div class="control-section">
+            <strong>🎵 Game:</strong> <span class="key">M</span> Toggle Music • <span class="key">ESC</span> Pause • <span class="key">Enter</span> Start Game
+        </div>
+    </div>
+
+    <div class="status" id="status">
+        Ready to play! Find the sword and magic staff to become a true knight! 🗡️🔮
+    </div>
+
+    <!-- Game Scripts in proper loading order -->
+    <script src="js/zelda/TilesetExtractor.js"></script>
+    <script src="js/zelda/SpriteLoader.js"></script>
+    <script src="js/zelda/GameMap.js"></script>
+    <script src="js/zelda/Inventory.js"></script>
+    <script src="js/zelda/Projectile.js"></script>
+    <script src="js/zelda/ParticleSystem.js"></script>
+    <script src="js/zelda/Enemy.js"></script>
+    <script src="js/zelda/Player.js"></script>
+    <script src="js/zelda/Game.js"></script>
+    
+    <script>
+        // Enhanced error handling
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            console.error('🚨 JavaScript Error:', msg);
+            console.error('📁 File:', url, 'Line:', lineNo, 'Column:', columnNo);
+            if (error) console.error('📋 Stack:', error.stack);
+            
+            // Show error in status
+            const status = document.getElementById('status');
+            if (status) {
+                status.innerHTML = `❌ Error: ${msg} (Check console for details)`;
+                status.style.background = 'rgba(255,0,0,0.3)';
+            }
+            return false;
+        };
+        
+        // Game initialization
+        window.addEventListener('load', () => {
+            console.log('🌟 Page loaded, starting Llama Knight Adventure...');
+            
+            try {
+                // Hide loading spinner
+                const loading = document.getElementById('loading');
+                if (loading) {
+                    loading.style.display = 'none';
+                }
+                
+                // Create game instance
+                window.game = new ZeldaGame();
+                console.log('✅ Game instance created successfully');
+                
+                // Update status
+                const status = document.getElementById('status');
+                if (status) {
+                    status.innerHTML = '🎮 Game loaded! Press <span class="key">Enter</span> or <span class="key">Space</span> to start your adventure!';
+                    status.style.background = 'rgba(0,255,136,0.3)';
+                }
+                
+            } catch (error) {
+                console.error('❌ Failed to create game:', error);
+                
+                const status = document.getElementById('status');
+                if (status) {
+                    status.innerHTML = `❌ Game failed to load: ${error.message}`;
+                    status.style.background = 'rgba(255,0,0,0.3)';
+                }
+                
+                // Show loading div with error
+                const loading = document.getElementById('loading');
+                if (loading) {
+                    loading.innerHTML = `<div style="color: #ff4444;">❌ Error loading game:<br>${error.message}</div>`;
+                }
+            }
+        });
+        
+        // Debug helper
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'F12') {
+                e.preventDefault();
+                if (window.game && window.game.spriteLoader) {
+                    const debugInfo = window.game.spriteLoader.getDebugInfo();
+                    console.log('🔍 Debug Info:', debugInfo);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

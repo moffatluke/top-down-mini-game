@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Tileset Extractor</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: white;
+            font-family: 'Courier New', monospace;
+            min-height: 100vh;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: #00ff88;
+            text-shadow: 0 0 10px rgba(0,255,136,0.5);
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #ccc;
+            font-size: 14px;
+        }
+        
+        #container {
+            display: flex;
+            gap: 30px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        #tilesetSection {
+            flex: 1;
+        }
+        
+        #tilesetContainer {
+            position: relative;
+            border: 3px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        
+        #tilesetDisplay {
+            cursor: crosshair;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            display: block;
+        }
+        
+        #selectionOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .selection-rect {
+            position: absolute;
+            border: 2px solid #00ff88;
+            background: rgba(0,255,136,0.1);
+            box-shadow: 0 0 10px rgba(0,255,136,0.5);
+        }
+        
+        .tile-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            opacity: 0.3;
+        }
+        
+        #info {
+            min-width: 350px;
+            background: rgba(42,42,42,0.9);
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #444;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+            height: fit-content;
+        }
+        
+        .info-section {
+            margin-bottom: 25px;
+            padding: 15px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            border-left: 4px solid #00ff88;
+        }
+        
+        .info-section h3 {
+            margin: 0 0 10px 0;
+            color: #00ff88;
+            font-size: 16px;
+        }
+        
+        #selectedTiles {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+            gap: 8px;
+            margin: 10px 0;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            background: #000;
+            border-radius: 4px;
+        }
+        
+        .selected-tile {
+            width: 48px;
+            height: 48px;
+            border: 1px solid #555;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            background: #111;
+            position: relative;
+        }
+        
+        .selected-tile::after {
+            content: attr(data-coords);
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 8px;
+            color: #888;
+            white-space: nowrap;
+        }
+        
+        .button {
+            background: linear-gradient(135deg, #4a4a4a, #2a2a2a);
+            color: white;
+            border: 1px solid #666;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        
+        .button:hover {
+            background: linear-gradient(135deg, #5a5a5a, #3a3a3a);
+            border-color: #00ff88;
+            transform: translateY(-1px);
+        }
+        
+        .button:active {
+            transform: translateY(0);
+        }
+        
+        .coords-display {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            color: #00ff88;
+            background: #000;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            border: 1px solid #333;
+        }
+        
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        
+        .status {
+            color: #ffaa00;
+            font-style: italic;
+            margin: 10px 0;
+        }
+        
+        #tileSize {
+            width: 60px;
+            padding: 5px;
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 4px;
+        }
+        
+        .highlight {
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎨 Interactive Tileset Extractor</h1>
+        <p>Drag to select multiple tiles • Click individual tiles • Extract coordinates for your game</p>
+    </div>
+    
+    <div id="container">
+        <div id="tilesetSection">
+            <div id="tilesetContainer">
+                <canvas id="tilesetDisplay"></canvas>
+                <canvas id="selectionOverlay"></canvas>
+            </div>
+        </div>
+        
+        <div id="info">
+            <div class="info-section">
+                <h3>🎮 Controls</h3>
+                <p><strong>Drag:</strong> Select multiple tiles</p>
+                <p><strong>Click:</strong> Select single tile</p>
+                <p><strong>Shift+Click:</strong> Add to selection</p>
+                <p><strong>Ctrl+Click:</strong> Remove from selection</p>
+            </div>
+            
+            <div class="info-section">
+                <h3>⚙️ Settings</h3>
+                <label>Tile Size: <input type="number" id="tileSize" value="16" min="8" max="32"></label>
+                <div class="controls">
+                    <button class="button" onclick="toggleGrid()">Toggle Grid</button>
+                    <button class="button" onclick="clearSelection()">Clear Selection</button>
+                    <button class="button" onclick="exportSelection()">Export Code</button>
+                </div>
+            </div>
+            
+            <div class="info-section">
+                <h3>📍 Selection Info</h3>
+                <div class="status" id="selectionStatus">No tiles selected</div>
+                <div id="selectedTiles"></div>
+            </div>
+            
+            <div class="info-section">
+                <h3>💾 Coordinates</h3>
+                <div class="coords-display" id="coordsOutput">// Select tiles to see coordinates</div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Tileset Extractor with Drag Selection
+        class InteractiveTilesetExtractor {
+            constructor() {
+                this.canvas = document.getElementById('tilesetDisplay');
+                this.ctx = this.canvas.getContext('2d');
+                this.overlayCanvas = document.getElementById('selectionOverlay');
+                this.overlayCtx = this.overlayCanvas.getContext('2d');
+                
+                this.tilesetImage = null;
+                this.tileSize = 16;
+                this.scale = 2; // Display scale for better visibility
+                this.showGrid = true;
+                
+                // Selection state
+                this.selectedTiles = new Set();
+                this.isDragging = false;
+                this.dragStart = { x: 0, y: 0 };
+                this.dragEnd = { x: 0, y: 0 };
+                
+                this.setupEventListeners();
+                this.loadTileset();
+            }
+            
+            setupEventListeners() {
+                // Mouse events for selection
+                this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+                this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
+                this.canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
+                this.canvas.addEventListener('mouseleave', (e) => this.onMouseUp(e));
+                
+                // Tile size input
+                document.getElementById('tileSize').addEventListener('input', (e) => {
+                    this.tileSize = parseInt(e.target.value);
+                    this.redraw();
+                });
+                
+                // Prevent context menu
+                this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+            }
+            
+            async loadTileset() {
+                const img = new Image();
+                img.onload = () => {
+                    this.tilesetImage = img;
+                    this.setupCanvas();
+                    this.redraw();
+                    console.log('✅ Tileset loaded:', img.width + 'x' + img.height);
+                };
+                img.onerror = () => {
+                    console.error('❌ Failed to load tileset');
+                    this.showError('Could not load tileset. Make sure overworld_tileset.png exists in assets/sprites/');
+                };
+                img.src = 'assets/sprites/overworld_tileset.png';
+            }
+            
+            setupCanvas() {
+                if (!this.tilesetImage) return;
+                
+                // Set canvas size based on image and scale
+                const displayWidth = this.tilesetImage.width * this.scale;
+                const displayHeight = this.tilesetImage.height * this.scale;
+                
+                this.canvas.width = displayWidth;
+                this.canvas.height = displayHeight;
+                this.overlayCanvas.width = displayWidth;
+                this.overlayCanvas.height = displayHeight;
+                
+                // Disable smoothing for pixel art
+                this.ctx.imageSmoothingEnabled = false;
+                this.overlayCtx.imageSmoothingEnabled = false;
+            }
+            
+            redraw() {
+                if (!this.tilesetImage) return;
+                
+                // Clear both canvases
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+                
+                // Draw tileset
+                this.ctx.drawImage(
+                    this.tilesetImage, 
+                    0, 0, 
+                    this.canvas.width, 
+                    this.canvas.height
+                );
+                
+                // Draw grid if enabled
+                if (this.showGrid) {
+                    this.drawGrid();
+                }
+                
+                // Draw selections
+                this.drawSelections();
+                
+                // Draw current drag rectangle
+                if (this.isDragging) {
+                    this.drawDragRectangle();
+                }
+            }
+            
+            drawGrid() {
+                const scaledTileSize = this.tileSize * this.scale;
+                
+                this.overlayCtx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                this.overlayCtx.lineWidth = 1;
+                
+                // Vertical lines
+                for (let x = 0; x <= this.canvas.width; x += scaledTileSize) {
+                    this.overlayCtx.beginPath();
+                    this.overlayCtx.moveTo(x, 0);
+                    this.overlayCtx.lineTo(x, this.canvas.height);
+                    this.overlayCtx.stroke();
+                }
+                
+                // Horizontal lines
+                for (let y = 0; y <= this.canvas.height; y += scaledTileSize) {
+                    this.overlayCtx.beginPath();
+                    this.overlayCtx.moveTo(0, y);
+                    this.overlayCtx.lineTo(this.canvas.width, y);
+                    this.overlayCtx.stroke();
+                }
+                
+                // Draw coordinates
+                this.overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                this.overlayCtx.font = '10px Courier New';
+                
+                const tilesX = Math.floor(this.canvas.width / scaledTileSize);
+                const tilesY = Math.floor(this.canvas.height / scaledTileSize);
+                
+                for (let y = 0; y < tilesY; y++) {
+                    for (let x = 0; x < tilesX; x++) {
+                        const pixelX = x * scaledTileSize + 2;
+                        const pixelY = y * scaledTileSize + 12;
+                        this.overlayCtx.fillText(`${x},${y}`, pixelX, pixelY);
+                    }
+                }
+            }
+            
+            drawSelections() {
+                this.overlayCtx.strokeStyle = '#00ff88';
+                this.overlayCtx.fillStyle = 'rgba(0, 255, 136, 0.2)';
+                this.overlayCtx.lineWidth = 2;
+                
+                const scaledTileSize = this.tileSize * this.scale;
+                
+                for (const tileKey of this.selectedTiles) {
+                    const [x, y] = tileKey.split(',').map(Number);
+                    const pixelX = x * scaledTileSize;
+                    const pixelY = y * scaledTileSize;
+                    
+                    this.overlayCtx.fillRect(pixelX, pixelY, scaledTileSize, scaledTileSize);
+                    this.overlayCtx.strokeRect(pixelX, pixelY, scaledTileSize, scaledTileSize);
+                }
+            }
+            
+            drawDragRectangle() {
+                const startX = Math.min(this.dragStart.x, this.dragEnd.x);
+                const startY = Math.min(this.dragStart.y, this.dragEnd.y);
+                const width = Math.abs(this.dragEnd.x - this.dragStart.x);
+                const height = Math.abs(this.dragEnd.y - this.dragStart.y);
+                
+                this.overlayCtx.strokeStyle = '#ffaa00';
+                this.overlayCtx.fillStyle = 'rgba(255, 170, 0, 0.1)';
+                this.overlayCtx.lineWidth = 2;
+                this.overlayCtx.setLineDash([5, 5]);
+                
+                this.overlayCtx.fillRect(startX, startY, width, height);
+                this.overlayCtx.strokeRect(startX, startY, width, height);
+                
+                this.overlayCtx.setLineDash([]);
+            }
+            
+            getMouseTileCoords(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                const scaledTileSize = this.tileSize * this.scale;
+                const tileX = Math.floor(mouseX / scaledTileSize);
+                const tileY = Math.floor(mouseY / scaledTileSize);
+                
+                return { tileX, tileY, mouseX, mouseY };
+            }
+            
+            onMouseDown(e) {
+                const coords = this.getMouseTileCoords(e);
+                
+                this.isDragging = true;
+                this.dragStart = { x: coords.mouseX, y: coords.mouseY };
+                this.dragEnd = { x: coords.mouseX, y: coords.mouseY };
+                
+                // If not holding modifier keys, clear selection
+                if (!e.shiftKey && !e.ctrlKey) {
+                    this.selectedTiles.clear();
+                }
+            }
+            
+            onMouseMove(e) {
+                if (!this.isDragging) return;
+                
+                const coords = this.getMouseTileCoords(e);
+                this.dragEnd = { x: coords.mouseX, y: coords.mouseY };
+                
+                this.redraw();
+            }
+            
+            onMouseUp(e) {
+                if (!this.isDragging) return;
+                
+                this.isDragging = false;
+                
+                // Calculate selected tile range
+                const scaledTileSize = this.tileSize * this.scale;
+                
+                const startTileX = Math.floor(Math.min(this.dragStart.x, this.dragEnd.x) / scaledTileSize);
+                const startTileY = Math.floor(Math.min(this.dragStart.y, this.dragEnd.y) / scaledTileSize);
+                const endTileX = Math.floor(Math.max(this.dragStart.x, this.dragEnd.x) / scaledTileSize);
+                const endTileY = Math.floor(Math.max(this.dragStart.y, this.dragEnd.y) / scaledTileSize);
+                
+                // Add tiles to selection
+                for (let y = startTileY; y <= endTileY; y++) {
+                    for (let x = startTileX; x <= endTileX; x++) {
+                        const tileKey = `${x},${y}`;
+                        
+                        if (e.ctrlKey) {
+                            // Remove from selection
+                            this.selectedTiles.delete(tileKey);
+                        } else {
+                            // Add to selection
+                            this.selectedTiles.add(tileKey);
+                        }
+                    }
+                }
+                
+                this.updateUI();
+                this.redraw();
+            }
+            
+            updateUI() {
+                const count = this.selectedTiles.size;
+                const statusEl = document.getElementById('selectionStatus');
+                const tilesEl = document.getElementById('selectedTiles');
+                const coordsEl = document.getElementById('coordsOutput');
+                
+                // Update status
+                if (count === 0) {
+                    statusEl.textContent = 'No tiles selected';
+                    statusEl.className = 'status';
+                } else {
+                    statusEl.textContent = `${count} tile${count === 1 ? '' : 's'} selected`;
+                    statusEl.className = 'status highlight';
+                }
+                
+                // Update tiles display
+                tilesEl.innerHTML = '';
+                for (const tileKey of this.selectedTiles) {
+                    const [x, y] = tileKey.split(',').map(Number);
+                    const tileEl = this.extractTileElement(x, y);
+                    tileEl.setAttribute('data-coords', `${x},${y}`);
+                    tileEl.className = 'selected-tile';
+                    tilesEl.appendChild(tileEl);
+                }
+                
+                // Update coordinates output
+                if (count === 0) {
+                    coordsEl.textContent = '// Select tiles to see coordinates';
+                } else {
+                    const coords = Array.from(this.selectedTiles)
+                        .map(key => {
+                            const [x, y] = key.split(',').map(Number);
+                            return `{ x: ${x}, y: ${y} }`;
+                        })
+                        .join(',\n    ');
+                    
+                    coordsEl.textContent = `[\n    ${coords}\n]`;
+                }
+            }
+            
+            extractTileElement(tileX, tileY) {
+                if (!this.tilesetImage) return document.createElement('div');
+                
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                canvas.width = 48;
+                canvas.height = 48;
+                ctx.imageSmoothingEnabled = false;
+                
+                // Extract tile from tileset
+                const sourceX = tileX * this.tileSize;
+                const sourceY = tileY * this.tileSize;
+                
+                if (sourceX < this.tilesetImage.width && sourceY < this.tilesetImage.height) {
+                    ctx.drawImage(
+                        this.tilesetImage,
+                        sourceX, sourceY, this.tileSize, this.tileSize,
+                        0, 0, 48, 48
+                    );
+                }
+                
+                return canvas;
+            }
+            
+            showError(message) {
+                const statusEl = document.getElementById('selectionStatus');
+                statusEl.textContent = `❌ ${message}`;
+                statusEl.style.color = '#ff4444';
+            }
+        }
+        
+        // Global functions for buttons
+        let extractor;
+        
+        function toggleGrid() {
+            if (extractor) {
+                extractor.showGrid = !extractor.showGrid;
+                extractor.redraw();
+            }
+        }
+        
+        function clearSelection() {
+            if (extractor) {
+                extractor.selectedTiles.clear();
+                extractor.updateUI();
+                extractor.redraw();
+            }
+        }
+        
+        function exportSelection() {
+            if (!extractor || extractor.selectedTiles.size === 0) {
+                alert('No tiles selected to export!');
+                return;
+            }
+            
+            const coords = Array.from(extractor.selectedTiles)
+                .map(key => {
+                    const [x, y] = key.split(',').map(Number);
+                    return `{ x: ${x}, y: ${y} }`;
+                })
+                .join(',\n        ');
+            
+            const code = `TERRAIN_NAME: [
+        ${coords}
+    ]`;
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(code).then(() => {
+                alert('Coordinates copied to clipboard!');
+            }).catch(() => {
+                // Fallback for older browsers
+                const textarea = document.createElement('textarea');
+                textarea.value = code;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                alert('Coordinates copied to clipboard!');
+            });
+        }
+        
+        // Initialize when page loads
+        window.addEventListener('load', () => {
+            extractor = new InteractiveTilesetExtractor();
+        });
+    </script>
+</body>
+</html>
+        
+        #coordinates {
+            font-size: 18px;
+            color: #4CAF50;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🗺️ Overworld Tileset Coordinate Finder</h1>
+    <p>Click on any tile to see its coordinates and preview it scaled up.</p>
+    
+    <div id="container">
+        <div>
+            <canvas id="tilesetDisplay"></canvas>
+        </div>
+        
+        <div id="info">
+            <h3>Selected Tile Info</h3>
+            <div id="coordinates">Click a tile to select</div>
+            <canvas id="selectedTile"></canvas>
+            
+            <h4>Controls:</h4>
+            <button class="button" onclick="toggleGrid()">Toggle Grid</button>
+            <button class="button" onclick="resetZoom()">Reset Zoom</button>
+            <button class="button" onclick="zoomIn()">Zoom In</button>
+            <button class="button" onclick="zoomOut()">Zoom Out</button>
+            
+            <h4>Tile Mapping Code:</h4>
+            <textarea id="codeOutput" style="width: 100%; height: 200px; background: #1a1a1a; color: #4CAF50; border: 1px solid #555; font-family: monospace;">
+// Click tiles to generate mapping code
+            </textarea>
+            
+            <button class="button" onclick="copyCode()">Copy Code</button>
+            <button class="button" onclick="clearMappings()">Clear Mappings</button>
+        </div>
+    </div>
+
+    <script src="js/zelda/TilesetExtractor.js"></script>
+    <script>
+        let tilesetExtractor = new TilesetExtractor();
+        let canvas = document.getElementById('tilesetDisplay');
+        let ctx = canvas.getContext('2d');
+        let selectedTileCanvas = document.getElementById('selectedTile');
+        let selectedTileCtx = selectedTileCanvas.getContext('2d');
+        let showGrid = true;
+        let zoom = 2;
+        let tileMappings = [];
+        
+        // Load the tileset image
+        async function loadTileset() {
+            try {
+                // Load your actual tileset image
+                await tilesetExtractor.loadTileset('assets/sprites/overworld_tileset.png');
+                drawTileset();
+                console.log('✅ Tileset loaded successfully!');
+            } catch (error) {
+                console.error('❌ Failed to load tileset:', error);
+                console.log('💡 Make sure overworld_tileset.png is in assets/sprites/ folder');
+                createPlaceholderTileset();
+                drawTileset();
+            }
+        }
+        
+        function createPlaceholderTileset() {
+            // Create a placeholder tileset for demonstration
+            const img = new Image();
+            img.width = 800;
+            img.height = 600;
+            
+            const placeholderCanvas = document.createElement('canvas');
+            placeholderCanvas.width = 800;
+            placeholderCanvas.height = 600;
+            const placeholderCtx = placeholderCanvas.getContext('2d');
+            
+            // Draw a grid of colored squares as placeholder
+            for (let y = 0; y < 600; y += 16) {
+                for (let x = 0; x < 800; x += 16) {
+                    const hue = ((x / 16) + (y / 16)) * 20 % 360;
+                    placeholderCtx.fillStyle = `hsl(${hue}, 70%, 50%)`;
+                    placeholderCtx.fillRect(x, y, 16, 16);
+                }
+            }
+            
+            tilesetExtractor.tilesetImage = placeholderCanvas;
+        }
+        
+        function drawTileset() {
+            if (!tilesetExtractor.tilesetImage) return;
+            
+            const img = tilesetExtractor.tilesetImage;
+            canvas.width = img.width * zoom;
+            canvas.height = img.height * zoom;
+            
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            if (showGrid) {
+                drawGrid();
+            }
+        }
+        
+        function drawGrid() {
+            const tileSize = tilesetExtractor.tileSize * zoom;
+            
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 1;
+            
+            // Vertical lines
+            for (let x = 0; x <= canvas.width; x += tileSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            
+            // Horizontal lines
+            for (let y = 0; y <= canvas.height; y += tileSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+        }
+        
+        // Handle tile selection
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const tileX = Math.floor(x / (tilesetExtractor.tileSize * zoom));
+            const tileY = Math.floor(y / (tilesetExtractor.tileSize * zoom));
+            
+            selectTile(tileX, tileY);
+        });
+        
+        function selectTile(tileX, tileY) {
+            document.getElementById('coordinates').textContent = `Tile: (${tileX}, ${tileY})`;
+            
+            // Extract and display the selected tile
+            const tile = tilesetExtractor.extractTile(tileX, tileY);
+            if (tile) {
+                selectedTileCtx.clearRect(0, 0, selectedTileCanvas.width, selectedTileCanvas.height);
+                selectedTileCtx.drawImage(tile, 0, 0, selectedTileCanvas.width, selectedTileCanvas.height);
+            }
+            
+            // Add to mappings
+            const tileName = prompt(`Enter a name for this tile (${tileX}, ${tileY}):`);
+            if (tileName) {
+                tileMappings.push({ name: tileName, x: tileX, y: tileY });
+                updateCodeOutput();
+            }
+        }
+        
+        function updateCodeOutput() {
+            let code = '// Tile mappings for your sprite sheet\\n{\\n';
+            tileMappings.forEach(mapping => {
+                code += `    '${mapping.name}': { x: ${mapping.x}, y: ${mapping.y} },\\n`;
+            });
+            code += '}';
+            
+            document.getElementById('codeOutput').value = code;
+        }
+        
+        function toggleGrid() {
+            showGrid = !showGrid;
+            drawTileset();
+        }
+        
+        function resetZoom() {
+            zoom = 2;
+            drawTileset();
+        }
+        
+        function zoomIn() {
+            zoom = Math.min(zoom * 1.5, 8);
+            drawTileset();
+        }
+        
+        function zoomOut() {
+            zoom = Math.max(zoom / 1.5, 0.5);
+            drawTileset();
+        }
+        
+        function copyCode() {
+            const textarea = document.getElementById('codeOutput');
+            textarea.select();
+            document.execCommand('copy');
+            alert('Code copied to clipboard!');
+        }
+        
+        function clearMappings() {
+            tileMappings = [];
+            updateCodeOutput();
+        }
+        
+        // Initialize
+        loadTileset();
+    </script>
+</body>
+</html>

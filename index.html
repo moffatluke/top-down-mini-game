@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Llama Knight Adventure</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Courier New', monospace;
+        }
+
+        #gameContainer {
+            position: relative;
+            background: #000;
+            border: 4px solid #333;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            overflow: hidden;  /* Hide any overflow from scaling */
+            padding: 20px;     /* Extra space around the scaled canvas */
+        }
+
+        #gameCanvas {
+            display: block;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 12px;
+            text-shadow: 1px 1px 0px #000;
+            pointer-events: none;
+        }
+
+        #controls {
+            position: absolute;
+            bottom: -60px;
+            left: 50%; 
+            transform: translateX(-50%);
+            color: #888;
+            font-size: 10px;
+            text-align: center;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="1024" height="768"></canvas>
+        <div id="ui">
+            <div>Llama Knight Adventure</div>
+            <div id="debug"></div>
+        </div>
+        <div id="controls">
+            WASD: Move • SPACE: Dash • 1,2,3: Select Weapon • Mouse: Aim & Shoot (Staff) • I: Inventory • +/-: Zoom • F1: Debug
+        </div>
+    </div>
+
+    <!-- Game Scripts -->
+    <script src="js/zelda/SimpleSpriteLoader.js"></script>
+    <script src="js/zelda/GameMap.js"></script>
+    <script src="js/zelda/Inventory.js"></script>
+    <script src="js/zelda/Projectile.js"></script>
+    
+    <!-- Room System -->
+    <script src="js/zelda/rooms/BaseRoom.js"></script>
+    <script src="js/zelda/rooms/MainRoom.js"></script>
+    <script src="js/zelda/rooms/ForestRoom.js"></script>
+    <script src="js/zelda/rooms/StaffRoom.js"></script>
+    <script src="js/zelda/rooms/RoomManager.js"></script>
+    
+    <!-- NPC Scripts -->
+    <!-- <script src="js/zelda/npcs/Bear.js"></script> -->
+    <script src="js/zelda/npcs/Wolf.js"></script>
+    <!-- <script src="js/zelda/npcs/Snake.js"></script> -->
+    <!-- <script src="js/zelda/npcs/Beetle.js"></script> -->
+    
+    <!-- Player and Game -->
+    <script src="js/zelda/Player.js"></script>
+    <script src="js/zelda/Game.js"></script>
+    <script>
+        // Global error handler
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            console.error(' JavaScript Error:', msg);
+            console.error('File:', url, 'Line:', lineNo, 'Column:', columnNo);
+            if (error) console.error('Stack:', error.stack);
+            return false;
+        };
+        
+        // Initialize the game
+        window.addEventListener('load', () => {
+            console.log('🌟 Page loaded, initializing game...');
+            try {
+                window.game = new ZeldaGame();
+                console.log('✅ Game instance created');
+            } catch (error) {
+                console.error('❌ Failed to create game:', error);
+            }
+        });
+    </script>
+</body>
+</html>
