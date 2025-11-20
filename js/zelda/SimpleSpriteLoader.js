@@ -8,7 +8,6 @@ class SimpleSpriteLoader {
     constructor() {
         // Sprite storage
         this.sprites = new Map();
-        this.loadingComplete = false;
         
         // Tileset properties
         this.tilesetImage = null;
@@ -16,8 +15,6 @@ class SimpleSpriteLoader {
         this.scaledTileSize = 24;          // Game tile size (larger for better detail)
         this.tileCache = new Map();        // Cache extracted tiles for performance
         
-        // Weapon selection (simplified)
-        this.selectedSwordIndex = 0;       // Always use first sword option
         
         // Sprite paths
         this.spriteDefinitions = {

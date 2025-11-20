@@ -138,9 +138,6 @@ class MainRoom extends BaseRoom {
         // Create animal spawn points (avoiding roads and obstacles)
         const animalSpawns = [
             { type: 'wolf', x: 200, y: 200 },     // Top-left grass area
-            { type: 'bear', x: 800, y: 150 },     // Top-right near water
-            { type: 'beetle', x: 150, y: 600 },   // Bottom-left grass area
-            { type: 'snake', x: 700, y: 550 },    // Bottom-right grass area
             { type: 'wolf', x: 400, y: 100 }      // Top-center grass area
         ];
         

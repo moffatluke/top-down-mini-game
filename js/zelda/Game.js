@@ -87,9 +87,6 @@ class ZeldaGame {
         this.messageText = '';              // Current message to display
         this.messageTimer = 0;              // How long to show current message
         
-        // Background images
-        this.titleBackground = null;
-        
         this.init();
     }
 
@@ -462,76 +459,6 @@ class ZeldaGame {
         console.log('🎮 Title screen ready! Press ENTER or SPACE to start');
     }
     
-    startGame() {
-        console.log('🎮 Starting new game...');
-        this.gameState = 'playing';
-        
-        // Start background music
-        this.startBackgroundMusic();
-        
-        try {
-            // Try new room system first, fallback to old system
-            console.log('📍 Attempting to use new room system...');
-            
-            if (typeof RoomManager !== 'undefined') {
-                this.roomManager = new RoomManager(this.spriteLoader);
-                this.gameMap = this.roomManager.getCurrentRoom();
-                console.log('✅ New room system working');
-            } else {
-                throw new Error('RoomManager class not found');
-            }
-            
-            // For backward compatibility, still populate rooms object
-            this.rooms = {};
-            this.rooms[this.currentRoom] = this.gameMap;
-            
-            console.log('✅ Room system initialized successfully');
-            
-            // Create player at spawn position
-            console.log('🦙 Creating player...');
-            const spawnPos = this.roomManager ? this.roomManager.getSpawnPosition() : this.gameMap.getSpawnPosition();
-            this.player = new ZeldaPlayer(spawnPos.x, spawnPos.y, this.spriteLoader, this);
-            console.log('✅ Player created at:', spawnPos.x, spawnPos.y);
-            
-            // Create inventory system
-            console.log('🎒 Creating inventory...');
-            this.inventory = new ZeldaInventory(this.spriteLoader);
-            
-            // Connect player to inventory
-            this.player.inventory = this.inventory;
-            console.log('✅ Inventory connected to player');
-            
-            // Spawn enemies
-            console.log('👹 Spawning enemies...');
-            this.spawnEnemies();
-            
-            console.log('🎯 Game started! Use WASD to move, ESC to pause');
-            console.log('💡 Press F1 to toggle debug mode');
-            
-        } catch (error) {
-            console.error('❌ Error with new room system, falling back to old system:', error);
-            
-            // Fallback to old room system
-            try {
-                console.log('🔄 Using fallback room system...');
-                this.rooms = {};
-                this.rooms['main'] = new ZeldaGameMap(this.spriteLoader, 'main');
-                this.gameMap = this.rooms[this.currentRoom];
-                
-                const spawnPos = this.gameMap.getSpawnPosition();
-                this.player = new ZeldaPlayer(spawnPos.x, spawnPos.y, this.spriteLoader, this);
-                this.inventory = new ZeldaInventory(this.spriteLoader);
-                this.player.inventory = this.inventory;
-                
-                console.log('✅ Fallback system working');
-            } catch (fallbackError) {
-                console.error('❌ Even fallback failed:', fallbackError);
-                this.errorMessage = `Game Start Error: ${error.message}. Fallback also failed: ${fallbackError.message}`;
-            }
-        }
-    }
-
-
     gameLoop(currentTime = performance.now()) {
         if (!this.isRunning) return;
         
@@ -645,29 +572,14 @@ class ZeldaGame {
     }
 
     updateEnemies(deltaTime) {
-        // Update each enemy
+        // Update all enemies
         for (let i = this.enemies.length - 1; i >= 0; i--) {
             const enemy = this.enemies[i];
             enemy.update(deltaTime, this.player, this.gameMap);
             
-            // Remove dead enemies
-            if (enemy.aiState === 'dead' && enemy.health <= 0) {
-                this.enemies.splice(i, 1);
-                console.log('🪦 Dead enemy removed');
-            }
-        }
-    }
-
-    updateEnemies(deltaTime) {
-        // Update all enemies (now using peaceful animals)
-        for (let i = this.enemies.length - 1; i >= 0; i--) {
-            const enemy = this.enemies[i];
-            enemy.update(deltaTime, this.player, this.gameMap);
-            
-            // Remove only if enemy is truly dead (animals don't die in our system)
-            // Animals just flee, so we keep them in the game
-            if (enemy.aiState === 'dead' && enemy.health <= 0) {
-                console.log(`💀 ${enemy.type} defeated!`);
+            // Remove dead enemies (check both isDead flag and health)
+            if (enemy.isDead || (enemy.health !== undefined && enemy.health <= 0)) {
+                console.log(`💀 ${enemy.constructor.name} defeated!`);
                 this.enemies.splice(i, 1);
             }
         }
@@ -690,35 +602,92 @@ class ZeldaGame {
     checkCombat() {
         if (!this.player) return;
         
-        // Check projectile vs enemy collisions
+        // === SWORD COMBAT ===
+        if (this.player.isSwinging && !this.player.hasHitThisSwing) {
+            console.log('⚔️ Checking sword combat - player is swinging');
+            const swordReach = 40; // Sword reach distance
+            
+            for (let i = this.enemies.length - 1; i >= 0; i--) {
+                const enemy = this.enemies[i];
+                if (enemy.isDead) continue;
+                
+                // Calculate distance to enemy
+                const dx = enemy.x - this.player.x;
+                const dy = enemy.y - this.player.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // Check if enemy is in sword range
+                if (distance <= swordReach) {
+                    // Check if enemy is in front of player based on facing direction
+                    let inRange = false;
+                    const threshold = 30; // Angle threshold for being "in front"
+                    
+                    switch (this.player.direction) {
+                        case 'up':
+                            inRange = dy < 0 && Math.abs(dx) < threshold;
+                            break;
+                        case 'down':
+                            inRange = dy > 0 && Math.abs(dx) < threshold;
+                            break;
+                        case 'left':
+                            inRange = dx < 0 && Math.abs(dy) < threshold;
+                            break;
+                        case 'right':
+                            inRange = dx > 0 && Math.abs(dy) < threshold;
+                            break;
+                    }
+                    
+                    if (inRange) {
+                        // Deal damage based on enemy type
+                        console.log(`⚔️ SWORD HIT! Enemy: ${enemy.constructor.name}, Distance: ${distance.toFixed(1)}`);
+                        if (enemy.takeSwordHit) {
+                            enemy.takeSwordHit(this.player);
+                        } else if (enemy.takeDamage) {
+                            enemy.takeDamage(30, this.player.x, this.player.y);
+                        }
+                        
+                        // Mark that we hit an enemy this swing
+                        this.player.hasHitThisSwing = true;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // === PROJECTILE COMBAT ===
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             const projectile = this.projectiles[i];
             if (!projectile.active) continue;
             
             for (let j = 0; j < this.enemies.length; j++) {
                 const enemy = this.enemies[j];
-                if (enemy.aiState === 'dead') continue;
+                if (enemy.isDead) continue;
                 
                 // Check collision between projectile and enemy
                 if (projectile.checkCollision && projectile.checkCollision(enemy)) {
-                    console.log(`🔥 ${projectile.isCharged ? 'CHARGED' : 'Normal'} fireball startled ${enemy.type}!`);
+                    console.log(`🔥 ${projectile.isCharged ? 'CHARGED' : 'Normal'} fireball hit enemy!`);
                     
-                    // Startle the animal instead of damaging it
-                    enemy.takeDamage(0, projectile.x, projectile.y); // 0 damage, just startles them
+                    // Deal fireball damage to enemy
+                    if (enemy.takeFireballHit) {
+                        enemy.takeFireballHit(this.player, projectile.isCharged);
+                    } else if (enemy.takeDamage) {
+                        const damage = projectile.isCharged ? 48 : 21;
+                        enemy.takeDamage(damage, projectile.x, projectile.y);
+                    }
                     
                     // Remove projectile
                     projectile.active = false;
                     
-                    // Create explosion if charged fireball (but don't harm other animals)
+                    // Create explosion if charged fireball
                     if (projectile.isCharged) {
                         this.createExplosion(projectile.x, projectile.y, projectile.explosionRadius);
                         
-                        // Startle other nearby animals
+                        // Damage other nearby enemies
                         for (let k = 0; k < this.enemies.length; k++) {
-                            if (k === j) continue; // Skip the animal already hit
+                            if (k === j) continue; // Skip the enemy already hit
                             
                             const otherEnemy = this.enemies[k];
-                            if (otherEnemy.aiState === 'dead') continue;
+                            if (otherEnemy.isDead) continue;
                             
                             const distance = Math.sqrt(
                                 Math.pow(otherEnemy.x - projectile.x, 2) + 
@@ -726,8 +695,12 @@ class ZeldaGame {
                             );
                             
                             if (distance <= projectile.explosionRadius) {
-                                otherEnemy.takeDamage(0, projectile.x, projectile.y); // Just startle them
-                                console.log(`💥 Explosion startled ${otherEnemy.type}!`);
+                                if (otherEnemy.takeFireballHit) {
+                                    otherEnemy.takeFireballHit(this.player, true);
+                                } else if (otherEnemy.takeDamage) {
+                                    otherEnemy.takeDamage(48, projectile.x, projectile.y);
+                                }
+                                console.log(`💥 Explosion damaged nearby enemy!`);
                             }
                         }
                     }
@@ -1222,28 +1195,19 @@ class ZeldaGame {
     }
 
     collectItem(item) {
-        console.log(`✨ Collected ${item.type}!`);
+        console.log(`? Collected ${item.type}!`);
         
-        if (item.type === 'magic_staff') {
-            // Add to inventory and switch to it
+        if (item.type === 'magic_staff' || item.type === 'staff') {
             this.inventory.addItem('staff');
             this.inventory.currentWeaponIndex = this.inventory.weapons.findIndex(w => w.id === 'staff');
-            this.player.equipMagicStaff(); // Also set the fallback flag
-            console.log('🔮 Magic Staff added to inventory!');
-        } else if (item.type === 'staff') {
-            // Handle staff type (alternative naming)
-            this.inventory.addItem('staff');
-            this.inventory.currentWeaponIndex = this.inventory.weapons.findIndex(w => w.id === 'staff');
-            this.player.equipMagicStaff(); // Also set the fallback flag
-            console.log('🔮 Magic Staff added to inventory!');
+            this.player.equipMagicStaff();
+            console.log('?? Magic Staff added to inventory!');
         } else if (item.type === 'sword') {
-            // Add sword to inventory and switch to it
             this.inventory.addItem('sword');
             this.inventory.currentWeaponIndex = this.inventory.weapons.findIndex(w => w.id === 'sword');
-            this.player.equipSword(); // Also set the fallback flag
-            console.log('⚔️ Sword added to inventory!');
+            this.player.equipSword();
+            console.log('?? Sword added to inventory!');
         }
-        // Add other item types here as needed
     }
     
     spawnEnemies() {

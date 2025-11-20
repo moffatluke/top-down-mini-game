@@ -124,6 +124,7 @@ class ZeldaPlayer {
         this.comboResetTimer = 0;           // Timer to reset combo after inactivity
         this.comboResetDelay = 3000;        // 3 seconds before combo resets
         this.swordHoldTimer = 0;            // Timer for holding sword in down position
+        this.hasHitThisSwing = false;       // Track if sword hit an enemy this swing
         this.comboCount = 0;                // Number of consecutive attacks (0-3)
         this.comboResetTimer = 0;           // Timer to reset combo after inactivity
         this.comboResetDelay = 3000;        // 3 seconds before combo resets
@@ -644,7 +645,12 @@ class ZeldaPlayer {
         if (!hasSwordEquipped || this.isSwinging) {
             console.log('❌ Cannot swing sword - not equipped or already swinging');
             return;
-        }        // Reset combo timer since we're attacking
+        }
+        
+        // Reset hit tracking for new swing
+        this.hasHitThisSwing = false;
+        
+        // Reset combo timer since we're attacking
         this.comboResetTimer = 0;
         this.comboCount++;
         

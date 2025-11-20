@@ -50,6 +50,12 @@ class Wolf {
         this.animationTimer = 0;
         this.animationSpeed = 150;
         
+        // === ATTACK ANIMATION ===
+        this.attackAnimationFrames = 4;     // How many frames in attack animation
+        this.attackAnimationSpeed = 100;    // Faster than walking (100ms per frame)
+        this.hasDealtDamage = false;        // Track if damage was dealt this attack
+        this.damageFrame = 2;               // Which frame deals damage (0-3)
+        
         // === AI STATE ===
         // States: 'idle', 'wandering', 'chasing', 'attacking', 'dead'
         this.state = 'idle';
@@ -64,18 +70,41 @@ class Wolf {
     
     loadWolfSprites() {
         try {
-            // Load normal wolf sprite (Wolf.png)
+            // Load normal wolf sprite (Wolf.png) - 4x14 layout
             this.normalSprite = this.spriteLoader.getAnimal('wolf', false);
             
-            // Load attack wolf sprite (Wolf_Attack.png) 
+            // Load attack wolf sprite (Wolf_Attack.png) - 4x4 layout
             this.attackSprite = this.spriteLoader.getAnimal('wolf', true);
+            
+            let normalLoaded = false;
+            let attackLoaded = false;
+            
+            const checkBothLoaded = () => {
+                if (normalLoaded && attackLoaded) {
+                    this.calculateFrameDimensions();
+                }
+            };
             
             if (this.normalSprite) {
                 if (this.normalSprite.complete) {
-                    this.calculateFrameDimensions();
+                    normalLoaded = true;
+                    checkBothLoaded();
                 } else {
                     this.normalSprite.onload = () => {
-                        this.calculateFrameDimensions();
+                        normalLoaded = true;
+                        checkBothLoaded();
+                    };
+                }
+            }
+            
+            if (this.attackSprite) {
+                if (this.attackSprite.complete) {
+                    attackLoaded = true;
+                    checkBothLoaded();
+                } else {
+                    this.attackSprite.onload = () => {
+                        attackLoaded = true;
+                        checkBothLoaded();
                     };
                 }
             }
@@ -87,15 +116,26 @@ class Wolf {
     
     calculateFrameDimensions() {
         if (this.normalSprite && this.normalSprite.complete) {
-            // Sprite sheets are 4x14 layout
+            // Normal sprite: 4x14 layout
             this.frameWidth = Math.floor(this.normalSprite.width / 4);
             this.frameHeight = Math.floor(this.normalSprite.height / 14);
             this.spriteRows = 14;
             this.spriteCols = 4;
-            this.spritesLoaded = true;
             
             console.log(`✅ Wolf sprites loaded: ${this.frameWidth}x${this.frameHeight} per frame`);
         }
+        
+        // Attack sprite: 4x4 layout (different from normal sprite!)
+        if (this.attackSprite && this.attackSprite.complete) {
+            this.attackFrameWidth = Math.floor(this.attackSprite.width / 4);
+            this.attackFrameHeight = Math.floor(this.attackSprite.height / 4);
+            this.attackSpriteRows = 4;
+            this.attackSpriteCols = 4;
+            
+            console.log(`✅ Wolf attack sprites loaded: ${this.attackFrameWidth}x${this.attackFrameHeight} per frame (4x4 grid)`);
+        }
+        
+        this.spritesLoaded = true;
     }
     
     /**
@@ -256,15 +296,23 @@ class Wolf {
         // Face the player
         this.facePlayer(player);
         
-        // Check if we can attack (cooldown elapsed)
-        const currentTime = Date.now();
-        if (currentTime - this.lastAttackTime >= this.attackCooldown) {
-            this.performAttack(player);
-            this.lastAttackTime = currentTime;
+        // === DAMAGE ON SPECIFIC ANIMATION FRAME ===
+        // Only deal damage when animation reaches the damage frame
+        if (this.animationFrame === this.damageFrame && !this.hasDealtDamage) {
+            const currentTime = Date.now();
+            // Check cooldown to prevent spam
+            if (currentTime - this.lastAttackTime >= this.attackCooldown) {
+                this.performAttack(player);
+                this.hasDealtDamage = true;  // Mark damage as dealt
+                this.lastAttackTime = currentTime;
+                console.log('⚔️ Wolf deals damage on animation frame ' + this.damageFrame);
+            }
         }
         
-        // Return to chasing after attack animation completes
-        if (this.stateTimer > 800) {
+        // === END ATTACK WHEN ANIMATION COMPLETES ===
+        // Attack animation is 4 frames × 100ms = 400ms total
+        const attackAnimationDuration = this.attackAnimationFrames * this.attackAnimationSpeed;
+        if (this.stateTimer > attackAnimationDuration) {
             this.setState('chasing');
         }
     }
@@ -293,9 +341,21 @@ class Wolf {
             this.direction = directions[Math.floor(Math.random() * directions.length)];
         }
         
+        // === ATTACK STATE SETUP ===
+        if (newState === 'attacking') {
+            this.hasDealtDamage = false;  // Reset damage flag for new attack
+            this.animationFrame = 0;       // Start attack animation from beginning
+            this.animationTimer = 0;       // Reset animation timer
+            console.log('🐺 Wolf begins attack sequence');
+        }
+        
         this.state = newState;
         this.stateTimer = 0;
-        this.animationFrame = 0;
+        
+        // Only reset animation frame if NOT entering attack state (already reset above)
+        if (newState !== 'attacking') {
+            this.animationFrame = 0;
+        }
     }
     
     // ==========================================
@@ -466,6 +526,23 @@ class Wolf {
         if (!this.spritesLoaded) return;
         
         this.animationTimer += deltaTime;
+        
+        // === ATTACK ANIMATION (highest priority) ===
+        if (this.state === 'attacking') {
+            if (this.animationTimer >= this.attackAnimationSpeed) {
+                this.animationFrame = (this.animationFrame + 1) % this.attackAnimationFrames;
+                this.animationTimer = 0;
+                
+                // Check if we hit the damage frame
+                if (this.animationFrame === this.damageFrame && !this.hasDealtDamage) {
+                    // This frame should deal damage - will be checked in update loop
+                    console.log('💥 Wolf attack animation hit frame!');
+                }
+            }
+            return; // Don't process other animations
+        }
+        
+        // === NORMAL ANIMATIONS ===
         const animSpeed = this.isMoving ? this.animationSpeed : this.animationSpeed * 3;
         
         if (this.animationTimer >= animSpeed) {
@@ -485,10 +562,12 @@ class Wolf {
      */
     applyMovement(gameMap) {
         // Keep within map boundaries
-        if (gameMap && gameMap.mapWidth && gameMap.mapHeight) {
+        if (gameMap && gameMap.width && gameMap.height) {
             const margin = 32;
-            this.x = Math.max(margin, Math.min(gameMap.mapWidth - margin, this.x));
-            this.y = Math.max(margin, Math.min(gameMap.mapHeight - margin, this.y));
+            const mapWidth = gameMap.width * gameMap.tileSize;
+            const mapHeight = gameMap.height * gameMap.tileSize;
+            this.x = Math.max(margin, Math.min(mapWidth - margin, this.x));
+            this.y = Math.max(margin, Math.min(mapHeight - margin, this.y));
         }
         
         // Check collision with map tiles
@@ -524,21 +603,26 @@ class Wolf {
         
         // Select sprite based on state (use attack sprite when attacking)
         let sprite = this.normalSprite;
+        let frameWidth = this.frameWidth;
+        let frameHeight = this.frameHeight;
+        
         if (this.state === 'attacking' && this.attackSprite) {
             sprite = this.attackSprite;
+            frameWidth = this.attackFrameWidth;
+            frameHeight = this.attackFrameHeight;
         }
         
         const frameX = this.animationFrame;
         const frameY = this.getFrameRow();
         
         // Render wolf at 1.5x size for better visibility
-        const renderWidth = this.frameWidth * 1.5;
-        const renderHeight = this.frameHeight * 1.5;
+        const renderWidth = frameWidth * 1.5;
+        const renderHeight = frameHeight * 1.5;
         
         ctx.drawImage(
             sprite,
-            frameX * this.frameWidth, frameY * this.frameHeight, 
-            this.frameWidth, this.frameHeight,
+            frameX * frameWidth, frameY * frameHeight, 
+            frameWidth, frameHeight,
             screenX - renderWidth/2, screenY - renderHeight/2, 
             renderWidth, renderHeight
         );
@@ -579,13 +663,24 @@ class Wolf {
         // Use current direction when moving, last direction when idle
         const facingDirection = this.isMoving ? this.direction : this.lastDirection;
         
-        // Map directions to sprite sheet rows
+        // === ATTACK SPRITE ROW MAPPING (4x4 layout) ===
+        if (this.state === 'attacking') {
+            switch (facingDirection) {
+                case 'right': return 0;  // Row 0: Right-facing attacks
+                case 'left':  return 1;  // Row 1: Left-facing attacks
+                case 'down':  return 2;  // Row 2: Down-facing attacks
+                case 'up':    return 3;  // Row 3: Up-facing attacks
+                default:      return 2;  // Default to down
+            }
+        }
+        
+        // === NORMAL SPRITE ROW MAPPING (4x14 layout) ===
         switch (facingDirection) {
-            case 'down': return 3;
-            case 'left': return 1;  
+            case 'down':  return 3;
+            case 'left':  return 1;  
             case 'right': return 2;
-            case 'up': return 0;
-            default: return 3; // Default to down-facing
+            case 'up':    return 0;
+            default:      return 3; // Default to down-facing
         }
     }
     
