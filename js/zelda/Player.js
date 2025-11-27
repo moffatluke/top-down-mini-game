@@ -592,16 +592,16 @@ class ZeldaPlayer {
             redIntensity = 0.6; // Strong red flash for damage
             console.log('🔴 Damage flash active, intensity:', redIntensity);
         }
-        // Check for low health flash (persistent red flash when health < 30)
-        else if (this.currentHealth <= this.lowHealthThreshold && this.currentHealth > 0) {
-            const flashPhase = (this.lowHealthFlashTimer / this.lowHealthFlashDuration) * Math.PI * 2;
-            const flashAlpha = (Math.sin(flashPhase) + 1) / 2; // Oscillates between 0 and 1
-            if (flashAlpha > 0.3) { // Only show red when flash is bright enough
-                shouldShowRedOverlay = true;
-                redIntensity = 0.4 * flashAlpha; // Pulsing red for low health
-                console.log('💔 Low health flash active, intensity:', redIntensity);
-            }
-        }
+        // Low health flash disabled
+        // else if (this.currentHealth <= this.lowHealthThreshold && this.currentHealth > 0) {
+        //     const flashPhase = (this.lowHealthFlashTimer / this.lowHealthFlashDuration) * Math.PI * 2;
+        //     const flashAlpha = (Math.sin(flashPhase) + 1) / 2; // Oscillates between 0 and 1
+        //     if (flashAlpha > 0.3) { // Only show red when flash is bright enough
+        //         shouldShowRedOverlay = true;
+        //         redIntensity = 0.4 * flashAlpha; // Pulsing red for low health
+        //         console.log('💔 Low health flash active, intensity:', redIntensity);
+        //     }
+        // }
         
         // Apply red overlay if needed
         if (shouldShowRedOverlay) {

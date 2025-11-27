@@ -10,7 +10,7 @@
  * - Proper attack/idle/chase animations
  */
 class Wolf {
-    constructor(x, y, spriteLoader) {
+    constructor(x, y, spriteLoader, options = {}) {
         // Position (world coordinates)
         this.x = x;
         this.y = y;
@@ -18,13 +18,14 @@ class Wolf {
         this.lastY = y;
         
         // === COMBAT STATS ===
-        this.maxHealth = 100;
-        this.health = 100;
-        this.attackDamage = 25;              // Damage dealt to player
+        this.maxHealth = options.health || 100;
+        this.health = this.maxHealth;
+        this.attackDamage = options.attackDamage || 25;              // Damage dealt to player
         this.attackRange = 48;               // Pixels (about 3 tiles at 16px/tile)
         this.attackCooldown = 1200;          // Milliseconds between attacks
         this.lastAttackTime = 0;
-        this.xpReward = 50;                  // XP given to player on death
+        this.xpReward = options.xpReward || 50;                  // XP given to player on death
+        this.scale = options.scale || 1.0;   // Size multiplier for rendering
         
         // === CHASE BEHAVIOR ===
         this.detectionRange = 48;            // 3 tiles (16px * 3)
@@ -615,9 +616,9 @@ class Wolf {
         const frameX = this.animationFrame;
         const frameY = this.getFrameRow();
         
-        // Render wolf at 1.5x size for better visibility
-        const renderWidth = frameWidth * 1.5;
-        const renderHeight = frameHeight * 1.5;
+        // Render wolf at 1.5x base size with scale multiplier
+        const renderWidth = frameWidth * 1.5 * this.scale;
+        const renderHeight = frameHeight * 1.5 * this.scale;
         
         ctx.drawImage(
             sprite,

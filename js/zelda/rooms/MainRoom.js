@@ -138,7 +138,11 @@ class MainRoom extends BaseRoom {
         // Create animal spawn points (avoiding roads and obstacles)
         const animalSpawns = [
             { type: 'wolf', x: 200, y: 200 },     // Top-left grass area
-            { type: 'wolf', x: 400, y: 100 }      // Top-center grass area
+            { type: 'wolf', x: 400, y: 100 },     // Top-center grass area
+            // Stronger alpha wolves (spawn after killing normal wolves)
+            { type: 'alpha_wolf', x: 600, y: 200, health: 150, attackDamage: 35, scale: 1.3, xpReward: 100 },
+            { type: 'alpha_wolf', x: 700, y: 400, health: 150, attackDamage: 35, scale: 1.3, xpReward: 100 },
+            { type: 'alpha_wolf', x: 300, y: 500, health: 150, attackDamage: 35, scale: 1.3, xpReward: 100 }
         ];
         
         // Spawn each animal using individual NPC classes
@@ -149,6 +153,16 @@ class MainRoom extends BaseRoom {
                     case 'wolf':
                         if (typeof Wolf !== 'undefined') {
                             animal = new Wolf(spawn.x, spawn.y, this.spriteLoader);
+                        }
+                        break;
+                    case 'alpha_wolf':
+                        if (typeof Wolf !== 'undefined') {
+                            animal = new Wolf(spawn.x, spawn.y, this.spriteLoader, {
+                                health: spawn.health,
+                                attackDamage: spawn.attackDamage,
+                                scale: spawn.scale,
+                                xpReward: spawn.xpReward
+                            });
                         }
                         break;
                     case 'bear':
@@ -181,8 +195,15 @@ class MainRoom extends BaseRoom {
     
     // Update all animals
     updateAnimals(deltaTime, player) {
-        for (const animal of this.animals) {
+        for (let i = this.animals.length - 1; i >= 0; i--) {
+            const animal = this.animals[i];
             animal.update(deltaTime, player, this);
+            
+            // Remove dead animals
+            if (animal.isDead || (animal.health !== undefined && animal.health <= 0)) {
+                console.log(`💀 ${animal.constructor.name} defeated in room!`);
+                this.animals.splice(i, 1);
+            }
         }
     }
     

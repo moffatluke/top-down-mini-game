@@ -22,7 +22,7 @@ class ZeldaGame {
         // =====================================================
         // GAME STATE MANAGEMENT
         // =====================================================
-        this.gameState = 'title';           // Current state: 'title', 'playing', 'paused', 'gameover'
+        this.gameState = 'title';           // Current state: 'title', 'playing', 'paused', 'gameover', 'win'
         this.isRunning = false;             // Whether game loop is active
         this.lastTime = 0;                  // Timestamp of last frame (for delta time calculation)
         this.fps = 0;                       // Current frames per second
@@ -390,6 +390,12 @@ class ZeldaGame {
                 this.quitToTitle();
             }
             
+            // Win screen controls - any key returns to title
+            if (this.gameState === 'win') {
+                e.preventDefault();
+                this.quitToTitle();
+            }
+            
             if (e.code === 'F1') {
                 e.preventDefault();
                 window.DEBUG_MODE = !window.DEBUG_MODE;
@@ -530,6 +536,9 @@ class ZeldaGame {
             
             this.checkCombat();
             
+            // Check for win condition (all wolves defeated)
+            this.checkWinCondition();
+            
             // Update fire tiles (remove expired ones)
             if (this.gameMap && this.gameMap.updateFireTiles) {
                 this.gameMap.updateFireTiles(deltaTime);
@@ -572,23 +581,26 @@ class ZeldaGame {
     }
 
     updateEnemies(deltaTime) {
-        // Update all enemies
-        for (let i = this.enemies.length - 1; i >= 0; i--) {
-            const enemy = this.enemies[i];
-            enemy.update(deltaTime, this.player, this.gameMap);
-            
-            // Remove dead enemies (check both isDead flag and health)
-            if (enemy.isDead || (enemy.health !== undefined && enemy.health <= 0)) {
-                console.log(`💀 ${enemy.constructor.name} defeated!`);
-                this.enemies.splice(i, 1);
-            }
-        }
+        // Enemies are now managed by the room via updateAnimals()
+        // This method is kept for backward compatibility but does nothing
+        // since this.enemies is now always empty
     }
     
     updateAnimals(deltaTime) {
         // Update animals if current room has them
         if (this.gameMap && this.gameMap.updateAnimals && typeof this.gameMap.updateAnimals === 'function') {
             this.gameMap.updateAnimals(deltaTime, this.player);
+        }
+    }
+    
+    checkWinCondition() {
+        // Check if all wolves are defeated
+        if (this.gameMap && this.gameMap.animals) {
+            const remainingWolves = this.gameMap.animals.filter(animal => !animal.isDead);
+            if (remainingWolves.length === 0) {
+                console.log('🎉 All wolves defeated! You win!');
+                this.gameState = 'win';
+            }
         }
     }
     
@@ -604,11 +616,16 @@ class ZeldaGame {
         
         // === SWORD COMBAT ===
         if (this.player.isSwinging && !this.player.hasHitThisSwing) {
-            console.log('⚔️ Checking sword combat - player is swinging');
-            const swordReach = 40; // Sword reach distance
+            const currentWeapon = this.inventory ? this.inventory.getCurrentWeapon() : null;
             
-            for (let i = this.enemies.length - 1; i >= 0; i--) {
-                const enemy = this.enemies[i];
+            // Get enemies from room's animals array
+            const allEnemies = (this.gameMap && this.gameMap.animals) ? this.gameMap.animals : [];
+            
+            console.log('⚔️ Checking sword combat - Weapon:', currentWeapon ? currentWeapon.id : 'none', 'Total enemies:', allEnemies.length);
+            const swordReach = 4 * 24; // Sword reach: 4 tiles (96 pixels)
+            
+            for (let i = allEnemies.length - 1; i >= 0; i--) {
+                const enemy = allEnemies[i];
                 if (enemy.isDead) continue;
                 
                 // Calculate distance to enemy
@@ -616,35 +633,44 @@ class ZeldaGame {
                 const dy = enemy.y - this.player.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
                 
+                console.log(`🎯 Checking enemy ${i}: Distance ${distance.toFixed(1)}, dx: ${dx.toFixed(1)}, dy: ${dy.toFixed(1)}`);
+                
                 // Check if enemy is in sword range
                 if (distance <= swordReach) {
-                    // Check if enemy is in front of player based on facing direction
-                    let inRange = false;
-                    const threshold = 30; // Angle threshold for being "in front"
+                    console.log(`📏 Enemy in range! Distance: ${distance.toFixed(1)}, Direction: ${this.player.direction}, dx: ${dx.toFixed(1)}, dy: ${dy.toFixed(1)}`);
+                    // Simplified: if in range, you can hit them regardless of direction
+                    let inRange = true; // Hit anything within sword reach
                     
-                    switch (this.player.direction) {
-                        case 'up':
-                            inRange = dy < 0 && Math.abs(dx) < threshold;
-                            break;
-                        case 'down':
-                            inRange = dy > 0 && Math.abs(dx) < threshold;
-                            break;
-                        case 'left':
-                            inRange = dx < 0 && Math.abs(dy) < threshold;
-                            break;
-                        case 'right':
-                            inRange = dx > 0 && Math.abs(dy) < threshold;
-                            break;
-                    }
+                    // Optional: Still check if generally in front (very lenient)
+                    // const threshold = 200; // Very wide angle threshold
+                    // switch (this.player.direction) {
+                    //     case 'up':
+                    //         inRange = dy < threshold;
+                    //         break;
+                    //     case 'down':
+                    //         inRange = dy > -threshold;
+                    //         break;
+                    //     case 'left':
+                    //         inRange = dx < threshold;
+                    //         break;
+                    //     case 'right':
+                    //         inRange = dx > -threshold;
+                    //         break;
+                    // }
                     
                     if (inRange) {
                         // Deal damage based on enemy type
-                        console.log(`⚔️ SWORD HIT! Enemy: ${enemy.constructor.name}, Distance: ${distance.toFixed(1)}`);
+                        console.log(`⚔️ SWORD HIT! Enemy: ${enemy.constructor.name} at (${enemy.x}, ${enemy.y}), Distance: ${distance.toFixed(1)}`);
+                        console.log(`   Health before: ${enemy.health}, isDead: ${enemy.isDead}`);
+                        console.log(`   Has takeSwordHit: ${!!enemy.takeSwordHit}, Has takeDamage: ${!!enemy.takeDamage}`);
+                        
                         if (enemy.takeSwordHit) {
                             enemy.takeSwordHit(this.player);
                         } else if (enemy.takeDamage) {
                             enemy.takeDamage(30, this.player.x, this.player.y);
                         }
+                        
+                        console.log(`   Health after: ${enemy.health}, isDead: ${enemy.isDead}`);
                         
                         // Mark that we hit an enemy this swing
                         this.player.hasHitThisSwing = true;
@@ -738,6 +764,9 @@ class ZeldaGame {
                 return;
             } else if (this.gameState === 'gameover') {
                 this.renderGameOverScreen();
+                return;
+            } else if (this.gameState === 'win') {
+                this.renderWinScreen();
                 return;
             }
             
@@ -948,6 +977,62 @@ class ZeldaGame {
         if (timeLeft <= 0) {
             this.quitToTitle();
         }
+    }
+    
+    renderWinScreen() {
+        // Golden overlay
+        this.ctx.fillStyle = 'rgba(50, 40, 0, 0.8)';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Victory panel
+        const panelWidth = 600;
+        const panelHeight = 400;
+        const panelX = (this.canvas.width - panelWidth) / 2;
+        const panelY = (this.canvas.height - panelHeight) / 2;
+        
+        // Panel background
+        this.ctx.fillStyle = '#1a2a10';
+        this.ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+        this.ctx.strokeStyle = '#4d7c0f';
+        this.ctx.lineWidth = 6;
+        this.ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+        
+        // Inner border
+        this.ctx.strokeStyle = '#84cc16';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(panelX + 10, panelY + 10, panelWidth - 20, panelHeight - 20);
+        
+        // Victory title
+        this.ctx.textAlign = 'center';
+        this.ctx.fillStyle = '#fbbf24';
+        this.ctx.font = 'bold 56px Arial';
+        this.ctx.strokeStyle = '#d97706';
+        this.ctx.lineWidth = 3;
+        this.ctx.strokeText('VICTORY!', this.canvas.width / 2, panelY + 90);
+        this.ctx.fillText('VICTORY!', this.canvas.width / 2, panelY + 90);
+        
+        // Victory message
+        this.ctx.fillStyle = '#d9f99d';
+        this.ctx.font = 'italic 26px Arial';
+        this.ctx.fillText('All wolves have been defeated!', this.canvas.width / 2, panelY + 150);
+        
+        // Success message
+        this.ctx.fillStyle = '#a3e635';
+        this.ctx.font = 'bold 22px Arial';
+        this.ctx.fillText('The Llama Knight stands victorious!', this.canvas.width / 2, panelY + 200);
+        
+        // Player stats
+        if (this.player) {
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.font = '20px Arial';
+            this.ctx.fillText(`Final Level: ${this.player.level}`, this.canvas.width / 2, panelY + 250);
+            this.ctx.fillText(`Total XP: ${this.player.xp}`, this.canvas.width / 2, panelY + 280);
+        }
+        
+        // Return instruction
+        this.ctx.fillStyle = '#fde047';
+        this.ctx.font = 'bold 22px Arial';
+        this.ctx.fillText('Press ANY KEY to return to Title Screen', this.canvas.width / 2, panelY + 340);
     }
     
     renderMouseTarget(ctx) {
@@ -1211,38 +1296,12 @@ class ZeldaGame {
     }
     
     spawnEnemies() {
+        // Don't spawn enemies here - let the room handle it via animals array
         this.enemies = []; // Clear existing enemies
         
-        // Spawn different NPC types using dedicated classes
-        if (this.currentRoom === 'main') {
-            // Main room - mixed wildlife
-            if (typeof Bear !== 'undefined') this.enemies.push(new Bear(200, 150, this.spriteLoader));
-            if (typeof Wolf !== 'undefined') this.enemies.push(new Wolf(400, 300, this.spriteLoader));
-            if (typeof Snake !== 'undefined') this.enemies.push(new Snake(600, 200, this.spriteLoader));
-            if (typeof Beetle !== 'undefined') this.enemies.push(new Beetle(150, 400, this.spriteLoader));
-        } else if (this.currentRoom === 'forest') {
-            // Forest room - more diverse wildlife
-            if (typeof Wolf !== 'undefined') this.enemies.push(new Wolf(120, 200, this.spriteLoader));
-            if (typeof Bear !== 'undefined') this.enemies.push(new Bear(350, 180, this.spriteLoader));
-            if (typeof Snake !== 'undefined') this.enemies.push(new Snake(280, 350, this.spriteLoader));
-            if (typeof Beetle !== 'undefined') this.enemies.push(new Beetle(450, 250, this.spriteLoader));
-            if (typeof Wolf !== 'undefined') this.enemies.push(new Wolf(180, 300, this.spriteLoader));
-            if (typeof Beetle !== 'undefined') this.enemies.push(new Beetle(320, 150, this.spriteLoader));
-        } else if (this.currentRoom === 'grove') {
-            // Grove room - calmer mix
-            if (typeof Snake !== 'undefined') this.enemies.push(new Snake(180, 180, this.spriteLoader));
-            if (typeof Bear !== 'undefined') this.enemies.push(new Bear(200, 350, this.spriteLoader));
-            if (typeof Beetle !== 'undefined') this.enemies.push(new Beetle(320, 280, this.spriteLoader));
-        } else if (this.currentRoom === 'orchard') {
-            // Orchard room - territorial bears with smaller creatures
-            if (typeof Bear !== 'undefined') {
-                this.enemies.push(new Bear(150, 200, this.spriteLoader));
-                this.enemies.push(new Bear(400, 200, this.spriteLoader));
-            }
-            if (typeof Snake !== 'undefined') this.enemies.push(new Snake(275, 320, this.spriteLoader));
-            if (typeof Beetle !== 'undefined') this.enemies.push(new Beetle(350, 150, this.spriteLoader));
-        }
-        // Staff room - keep it peaceful for now
+        // Enemies are now spawned by the room classes (MainRoom, ForestRoom, etc.)
+        // and accessed via this.gameMap.animals
+        console.log('📍 Enemies will be managed by room.animals array');
         
         console.log(`✅ Spawned ${this.enemies.length} NPCs in ${this.currentRoom} room`);
     }

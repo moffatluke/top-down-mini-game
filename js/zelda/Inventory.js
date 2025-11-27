@@ -16,7 +16,7 @@ class ZeldaInventory {
         ];
         
         // Current equipped items
-        this.currentWeaponIndex = 1; // Start with sword equipped
+        this.currentWeaponIndex = 0; // Start with no weapon
         this.currentArmorIndex = 0;  // Start with no armor
         
         // Collected items (what's available in inventory)
