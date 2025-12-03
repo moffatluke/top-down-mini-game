@@ -1,4 +1,4 @@
-class ForestRoom extends BaseRoom {
+﻿class ForestRoom extends BaseRoom {
     constructor(spriteLoader) {
         super(spriteLoader, 'forest');
         
@@ -54,7 +54,7 @@ class ForestRoom extends BaseRoom {
     // Spawn forest animals
     spawnAnimals() {
         if (!this.spriteLoader) {
-            console.warn('⚠️ Cannot spawn animals - no sprite loader');
+            console.warn('?? Cannot spawn animals - no sprite loader');
             return;
         }
         
@@ -71,17 +71,43 @@ class ForestRoom extends BaseRoom {
         // Spawn each animal
         for (const spawn of animalSpawns) {
             try {
-                const animal = new Animal(spawn.x, spawn.y, spawn.type, this.spriteLoader);
-                this.animals.push(animal);
-                console.log(`🌲 Spawned forest ${spawn.type} at (${spawn.x}, ${spawn.y})`);
+                let animal = null;
+                switch (spawn.type) {
+                    case 'bear':
+                        if (typeof Bear !== 'undefined') {
+                            animal = new Bear(spawn.x, spawn.y, this.spriteLoader);
+                        }
+                        break;
+                    case 'wolf':
+                        if (typeof Wolf !== 'undefined') {
+                            animal = new Wolf(spawn.x, spawn.y, this.spriteLoader);
+                        }
+                        break;
+                    case 'snake':
+                        if (typeof Snake !== 'undefined') {
+                            animal = new Snake(spawn.x, spawn.y, this.spriteLoader);
+                        }
+                        break;
+                    case 'beetle':
+                        if (typeof Beetle !== 'undefined') {
+                            animal = new Beetle(spawn.x, spawn.y, this.spriteLoader);
+                        }
+                        break;
+                }
+
+                if (animal) {
+                    this.animals.push(animal);
+                    console.log(?? Spawned forest  at (, ));
+                } else {
+                    console.warn(?? Failed to spawn forest  - class not available);
+                }
             } catch (error) {
-                console.warn(`⚠️ Failed to spawn ${spawn.type}:`, error);
+                console.warn(?? Failed to spawn :, error);
             }
         }
         
-        console.log(`🐻 Spawned ${this.animals.length} animals in forest room`);
+        console.log(?? Spawned  animals in forest room);
     }
-    
     // Update all animals
     updateAnimals(deltaTime, player) {
         for (const animal of this.animals) {

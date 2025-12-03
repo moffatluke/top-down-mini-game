@@ -472,35 +472,7 @@ class Wolf {
             this.die(player);
         }
     }
-    
-    /**
-     * Generic damage method (for projectiles, etc)
-     */
-    takeDamage(damage, sourceX, sourceY) {
-        if (this.isDead) return false;
-        
-        this.health -= damage;
-        console.log(`💥 Wolf takes ${damage} damage! (${this.health}/${this.maxHealth})`);
-        
-        // Brief knockback/flee reaction
-        if (sourceX !== undefined && sourceY !== undefined) {
-            const dx = this.x - sourceX;
-            const dy = this.y - sourceY;
-            
-            if (Math.abs(dx) > Math.abs(dy)) {
-                this.direction = dx > 0 ? 'right' : 'left';
-            } else {
-                this.direction = dy > 0 ? 'down' : 'up';
-            }
-        }
-        
-        if (this.health <= 0) {
-            return true; // Wolf died
-        }
-        
-        return false; // Wolf still alive
-    }
-    
+
     /**
      * Handle wolf death
      */
@@ -676,12 +648,14 @@ class Wolf {
         }
         
         // === NORMAL SPRITE ROW MAPPING (4x14 layout) ===
+        // Row 0: Right, Row 1: Left, Row 2: Down, Row 3: Up
+        // Rows 4-7: Jogging animations, Rows 8-11: Sprinting, Rows 12-13: Dying
         switch (facingDirection) {
-            case 'down':  return 3;
+            case 'right': return 0;
             case 'left':  return 1;  
-            case 'right': return 2;
-            case 'up':    return 0;
-            default:      return 3; // Default to down-facing
+            case 'down':  return 2;
+            case 'up':    return 3;
+            default:      return 2; // Default to down-facing
         }
     }
     
@@ -715,3 +689,5 @@ class Wolf {
         return distance < combinedRadius;
     }
 }
+
+

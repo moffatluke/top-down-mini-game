@@ -1327,29 +1327,14 @@ class ZeldaGame {
             // Always recreate rooms to reset items and state
             console.log('📍 Creating fresh rooms...');
             
-            // Try to use new room system, fallback to old system
-            try {
-                if (typeof RoomManager !== 'undefined') {
-                    console.log('🔄 Using new room system for new game...');
-                    this.roomManager = new RoomManager(this.spriteLoader);
-                    this.gameMap = this.roomManager.getCurrentRoom();
-                    
-                    // For backward compatibility
-                    this.rooms = {};
-                    this.rooms[this.currentRoom] = this.gameMap;
-                } else {
-                    throw new Error('RoomManager not available');
-                }
-            } catch (error) {
-                console.log('🔄 Using old room system for new game...');
-                this.rooms = {};
-                this.rooms['main'] = new ZeldaGameMap(this.spriteLoader, 'main');
-                this.rooms['staff_room'] = new ZeldaGameMap(this.spriteLoader, 'staff_room');
-                this.rooms['forest'] = new ZeldaGameMap(this.spriteLoader, 'forest');
-                this.rooms['grove'] = new ZeldaGameMap(this.spriteLoader, 'grove');
-                this.rooms['orchard'] = new ZeldaGameMap(this.spriteLoader, 'orchard');
-                this.gameMap = this.rooms[this.currentRoom];
+                        if (typeof RoomManager === 'undefined') {
+                throw new Error('RoomManager not available');
             }
+
+            // Use the room manager as the single source of rooms
+            console.log('?? Using room system for new game...');
+            this.roomManager = new RoomManager(this.spriteLoader);
+            this.gameMap = this.roomManager.getCurrentRoom();
             
             // Create fresh player at spawn position
             const spawnPos = this.roomManager ? this.roomManager.getSpawnPosition() : this.gameMap.getSpawnPosition();
